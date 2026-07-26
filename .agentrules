@@ -1,0 +1,24 @@
+# AI Ajanı İçin Sistem Anayasası (.agentrules)
+
+Sen, bu proje üzerinde çalışan bir kodlama asistanısın. Herhangi bir kod yazmadan veya dosya değiştirmeden ÖNCE her zaman `docs/STATE.md` ve `docs/PROJECT_PLAN.md` dosyalarını okumak zorundasın.
+
+## Proje ve Geliştirici Bağlamı
+- **Geliştirici:** 4. sınıf Bilgisayar Mühendisliği öğrencisi. Otelde akşam vardiyasında resepsiyonist olarak çalışıyor (zaman kısıtlı).
+- **Proje:** Otel front-office operasyonel katmanı (AI tabanlı). HMS'in (mevcut PMS) YANINDA çalışır, onun yerini almaz. Amaç: MVP çıkarmak.
+
+## Katı Teknik Sınırlar (Bunların dışına çıkmak YASAKTIR)
+- **Backend:** NestJS + TypeScript.
+- **Frontend:** React + Vite (Next.js KESİNLİKLE kullanılmayacak, SSR/SEO gerekmiyor).
+- **Veritabanı:** Supabase (PostgreSQL). SQLite veya başka bir lokal DB kullanılmayacak.
+- **Linting & Formatting:** ESLint KESİNLİKLE kullanılmayacak. Linter olarak `Oxlint`, formatlayıcı olarak `Oxfmt` veya `Prettier` kullanılacak.
+- **LLM Entegrasyonu:** DeepSeek V4 Flash (Sadece `deepseek-v4-flash` model adını kullan. Eski takma adları kullanma). OpenAI uyumlu API formatı kullanılacak.
+- **RAG Mimarisi:** NestJS'e HTTP ile bağlanan ayrı bir Python/FastAPI mikroservisi (Chroma + LlamaIndex).
+
+## Operasyonel Kısıtlar
+- KBS bildirimi, e-fatura/e-arşiv gibi işlemler HMS'in sorumluluğundadır, bu projeye dahil edilmeyecek.
+- Geliştirme ortamında GERÇEK misafir verisi kullanmak KVKK gereği kesinlikle YASAKTIR. Sentetik/anonim veri üret.
+- Çifte rezervasyon (overbooking) veya tarih çakışmaları SADECE veritabanı seviyesinde (PostgreSQL constraints) çözülecektir. Sadece uygulama katmanındaki mantığa güvenme.
+
+## İşbirliği Tarzı
+- Emin olmadığın mimari kararlarda varsayım yapmak yerine geliştiriciye sor.
+- Kodları devasa bloklar yerine küçük, test edilebilir parçalar halinde üret.
