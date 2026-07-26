@@ -6,11 +6,11 @@
 - [x] PostgreSQL kısıtlamalarının (Overbooking engeli) test edilmesi.
 - [x] TypeScript tiplerinin (`database.types.ts`) projeye çekilmesi.
 
-## Faz 2: Frontend İskeleti (Şu an buradayız)
+## Faz 2: Frontend İskeleti (Tamamlandı)
 
 - [x] Vite/React + Tailwind + Oxlint kurulumunun tamamlanması (Hera City Hotel teması ve Cinzel fontu uygulandı).
-- [ ] Supabase Auth ile basit resepsiyonist giriş (Login) ekranı.
-- [ ] Yönlendirme (React Router) yapısının kurulması.
+- [x] Supabase Auth ile basit resepsiyonist giriş (Login) ekranı.
+- [x] Yönlendirme (React Router) yapısının kurulması.
 
 ## Faz 3: Temel Operasyonel Modüller
 

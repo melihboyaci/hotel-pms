@@ -4,7 +4,8 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 2: Vite/React + Tailwind kurulumu ve basit auth ekranı
+- **Hedef:** Faz 3: Temel Operasyonel Modüller
+- **Detay:** Resepsiyon Dashboard'un geliştirilmesi (gerçek verilerin tam bağlanması), Günlük Özet Raporu ve Housekeeping panosunun detaylandırılması.
 
 ## Alınan Kararlar (Değiştirilemez)
 
@@ -22,4 +23,4 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Son Güncelleme
 
-Faz 1 tamamlandı. Faz 2 kapsamında Hera City Hotel kurumsal logosu, beyaz arka plan, altın sarısı renk teması ve Cinzel font entegrasyonu tamamlandı. Oda kartı tasarımları belirginleştirildi. Sıradaki hedef: Supabase Auth ile giriş (Login) ekranı ve React Router yapısı.
+Faz 2 tamamen tamamlandı. React Router kurularak sayfa yönlendirmeleri eklendi. Supabase Auth kullanılarak Hera City Hotel temalı 'Kullanıcı Adı' odaklı (e-posta türeten) Login sayfası oluşturuldu. Oturum kontrolü için ProtectedRoute eklendi. Artık Faz 3 (Operasyonel Modüller) aşamasına geçiliyor.
