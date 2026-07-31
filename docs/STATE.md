@@ -4,8 +4,11 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Durum:** Faz 3.1 tamamlandı.
-- **Son Yapılanlar:** `Rooms.tsx` sayfasına yapısal yatak konfigürasyonu (`bed_config`) ve güvenlik kontrollü oda silme özelliği eklendi. Supabase DB ve Types güncellendi.
+- **Hedef:** Faz 3.1.5 (Gelecek Tarihli Rezervasyon Yönetimi).
+- **Detay:** `Reservations.tsx` sayfasına "Yeni Rezervasyon Ekle" butonu ile tablodaki kayıtlar için "Düzenle" ve "İptal" aksiyonları eklenecek.
+- **Kritik:**
+  1. Yeni rezervasyon modalı, Check-in gibi anında `CHECKED_IN` ve `DIRTY` yapmaz. Sadece `status: 'PENDING'` olarak kaydeder.
+  2. Tablodaki "İşlemler" sütununda rezervasyon tarihini/odasını güncelleyen "Düzenle" ve statüyü `CANCELLED` yapan "İptal Et" butonları olacak.
 
 ## Alınan Kararlar (Değiştirilemez)
 

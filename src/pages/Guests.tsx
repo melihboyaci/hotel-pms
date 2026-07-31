@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Loader2, Users, Plus, X } from 'lucide-react'
+import { Search, Loader2, Users, Plus, X, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
 
@@ -21,6 +21,7 @@ export default function Guests() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null)
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -30,13 +31,18 @@ export default function Guests() {
   const [formLoading, setFormLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // Delete Confirm State
+  const [deleteConfirm, setDeleteConfirm] = useState<Guest | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const fetchGuests = async () => {
     try {
       const { data, error } = await supabase
         .from('guests')
         .select('*')
         .order('created_at', { ascending: false })
-      
+
       if (error) throw error
       setGuests(data as Guest[])
     } catch (err) {
@@ -50,23 +56,68 @@ export default function Guests() {
     fetchGuests()
   }, [])
 
+  // --- Modal Helpers ---
+  const openCreateModal = () => {
+    setEditingGuest(null)
+    setFormData({ first_name: '', last_name: '', identity_number: '', phone: '' })
+    setFormError(null)
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (guest: Guest) => {
+    setEditingGuest(guest)
+    setFormData({
+      first_name: guest.first_name,
+      last_name: guest.last_name,
+      identity_number: guest.identity_number,
+      phone: guest.phone || '',
+    })
+    setFormError(null)
+    setIsModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setEditingGuest(null)
+    setFormError(null)
+  }
+
+  // --- Save (Create or Update) ---
   const handleSaveGuest = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormLoading(true)
     setFormError(null)
 
     try {
-      const { error } = await supabase.from('guests').upsert({
-        identity_number: formData.identity_number,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        phone: formData.phone || null
-      }, { onConflict: 'identity_number' })
+      if (editingGuest) {
+        // UPDATE
+        const { error } = await supabase
+          .from('guests')
+          .update({
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            identity_number: formData.identity_number,
+            phone: formData.phone || null,
+          })
+          .eq('id', editingGuest.id)
 
-      if (error) throw error
+        if (error) throw error
+      } else {
+        // INSERT (upsert on identity_number conflict)
+        const { error } = await supabase.from('guests').upsert(
+          {
+            identity_number: formData.identity_number,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            phone: formData.phone || null,
+          },
+          { onConflict: 'identity_number' }
+        )
 
-      setIsModalOpen(false)
-      setFormData({ first_name: '', last_name: '', identity_number: '', phone: '' })
+        if (error) throw error
+      }
+
+      closeModal()
       await fetchGuests()
     } catch (err: any) {
       setFormError(err?.message || 'Misafir kaydedilirken hata oluştu.')
@@ -75,7 +126,72 @@ export default function Guests() {
     }
   }
 
-  const filteredGuests = guests.filter(guest => {
+  // --- Delete ---
+  const openDeleteConfirm = (guest: Guest) => {
+    setDeleteConfirm(guest)
+    setDeleteError(null)
+  }
+
+  const closeDeleteConfirm = () => {
+    setDeleteConfirm(null)
+    setDeleteError(null)
+  }
+
+  const handleDeleteGuest = async () => {
+    if (!deleteConfirm) return
+    setDeleteLoading(true)
+    setDeleteError(null)
+
+    try {
+      // Check if guest has any reservations
+      const { data: reservations, error: checkError } = await supabase
+        .from('reservations')
+        .select('id')
+        .eq('guest_id', deleteConfirm.id)
+        .limit(1)
+
+      if (checkError) throw checkError
+
+      if (reservations && reservations.length > 0) {
+        setDeleteError(
+          'Bu misafirin geçmiş veya gelecek rezervasyonları olduğu için sistemden silinemez!'
+        )
+        setDeleteLoading(false)
+        return
+      }
+
+      // Safe to delete
+      const { error: deleteErr } = await supabase
+        .from('guests')
+        .delete()
+        .eq('id', deleteConfirm.id)
+
+      if (deleteErr) {
+        // Catch FK violations from Supabase as a safety net
+        if (
+          deleteErr.code === '23503' ||
+          deleteErr.message?.toLowerCase().includes('foreign key')
+        ) {
+          setDeleteError(
+            'Bu misafirin geçmiş veya gelecek rezervasyonları olduğu için sistemden silinemez!'
+          )
+          setDeleteLoading(false)
+          return
+        }
+        throw deleteErr
+      }
+
+      closeDeleteConfirm()
+      await fetchGuests()
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Silme işlemi sırasında bir hata oluştu.')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  // --- Filter ---
+  const filteredGuests = guests.filter((guest) => {
     const fullName = `${guest.first_name} ${guest.last_name}`.toLowerCase()
     const searchLower = search.toLowerCase()
     return (
@@ -120,7 +236,7 @@ export default function Guests() {
               />
             </div>
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={openCreateModal}
               className="flex items-center justify-center gap-2 w-full md:w-auto bg-black text-gold-400 hover:bg-gray-900 px-6 py-2.5 rounded-xl text-sm font-bold tracking-wide uppercase shadow-sm transition-all cursor-pointer border border-gold-500/30"
             >
               <Plus size={18} />
@@ -140,12 +256,13 @@ export default function Guests() {
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Telefon</th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">E-posta</th>
                   <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Kayıt Tarihi</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">İşlemler</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredGuests.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-medium">
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400 font-medium">
                       Eşleşen kayıt bulunamadı.
                     </td>
                   </tr>
@@ -167,6 +284,26 @@ export default function Guests() {
                       <td className="px-6 py-4">
                         <span className="text-sm text-gray-500">{formatDate(guest.created_at)}</span>
                       </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Edit */}
+                          <button
+                            onClick={() => openEditModal(guest)}
+                            title="Misafiri Düzenle"
+                            className="p-2 rounded-lg text-gray-400 hover:text-gold-600 hover:bg-gold-50 transition-all cursor-pointer"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => openDeleteConfirm(guest)}
+                            title="Misafiri Sil"
+                            className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -176,20 +313,22 @@ export default function Guests() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Create / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-bold text-gray-800 font-cinzel">Yeni Misafir Kaydı</h2>
+              <h2 className="text-lg font-bold text-gray-800 font-cinzel">
+                {editingGuest ? 'Misafiri Düzenle' : 'Yeni Misafir Kaydı'}
+              </h2>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSaveGuest} className="p-6">
               {formError && (
                 <div className="mb-6 p-4 rounded-xl bg-rose-50 text-rose-700 text-sm border border-rose-200 font-medium">
@@ -205,7 +344,7 @@ export default function Guests() {
                       type="text"
                       required
                       value={formData.first_name}
-                      onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-all text-sm"
                     />
                   </div>
@@ -215,7 +354,7 @@ export default function Guests() {
                       type="text"
                       required
                       value={formData.last_name}
-                      onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-all text-sm"
                     />
                   </div>
@@ -227,7 +366,7 @@ export default function Guests() {
                     type="text"
                     required
                     value={formData.identity_number}
-                    onChange={e => setFormData({ ...formData, identity_number: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, identity_number: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-all text-sm font-medium"
                   />
                 </div>
@@ -237,7 +376,7 @@ export default function Guests() {
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-all text-sm"
                   />
                 </div>
@@ -246,7 +385,7 @@ export default function Guests() {
               <div className="mt-8 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeModal}
                   className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   İptal
@@ -260,6 +399,53 @@ export default function Guests() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-rose-100">
+                  <AlertTriangle className="text-rose-600" size={24} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-gray-900 mb-1">Misafiri Sil</h3>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-semibold text-gray-700">{deleteConfirm.first_name} {deleteConfirm.last_name}</span> adlı misafiri sistemden kalıcı olarak silmek istediğinize emin misiniz?
+                  </p>
+                </div>
+              </div>
+
+              {deleteError && (
+                <div className="mt-5 p-4 rounded-xl bg-rose-50 text-rose-700 text-sm border border-rose-200 font-medium flex items-start gap-2">
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeDeleteConfirm}
+                  disabled={deleteLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteGuest}
+                  disabled={deleteLoading}
+                  className="flex items-center justify-center min-w-[120px] px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold tracking-wide uppercase hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : 'Evet, Sil'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

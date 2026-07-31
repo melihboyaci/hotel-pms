@@ -164,7 +164,7 @@ export default function CheckIn() {
   const [roomId, setRoomId] = useState('')
   const [checkInDate, setCheckInDate] = useState('')
   const [checkOutDate, setCheckOutDate] = useState('')
-  const [totalPrice, setTotalPrice] = useState('')
+  const [nightlyPrice, setNightlyPrice] = useState('')
 
   // UI durumu
   const [submitting, setSubmitting] = useState(false)
@@ -208,7 +208,7 @@ export default function CheckIn() {
     setRoomId('')
     setCheckInDate('')
     setCheckOutDate('')
-    setTotalPrice('')
+    setNightlyPrice('')
     setError(null)
     setSuccess(false)
     setCurrentStep(null)
@@ -349,16 +349,23 @@ export default function CheckIn() {
       // ═══════════════════════════════════════════════════
       // AŞAMA 5: Oda Ücretini Folyoya İşle
       // ═══════════════════════════════════════════════════
-      if (totalPrice && parseFloat(totalPrice) > 0) {
+      if (nightlyPrice && parseFloat(nightlyPrice) > 0) {
         setCurrentStep('Oda ücreti folyoya işleniyor…')
         
+        const checkInTime = new Date(checkInDate).getTime()
+        const checkOutTime = new Date(checkOutDate).getTime()
+        const diffDays = Math.ceil((checkOutTime - checkInTime) / (1000 * 60 * 60 * 24))
+        const totalNights = Math.max(1, diffDays)
+        const pricePerNight = parseFloat(nightlyPrice)
+        const totalAmount = pricePerNight * totalNights
+
         const { error: txError } = await supabase
           .from('transactions')
           .insert({
             folio_id: folioData.id,
             transaction_type: 'ROOM_CHARGE',
-            amount: parseFloat(totalPrice),
-            description: 'Konaklama Ücreti'
+            amount: totalAmount,
+            description: `Konaklama Ücreti (${totalNights} Gece x ${pricePerNight} TL)`
           })
 
         if (txError) {
@@ -742,21 +749,21 @@ export default function CheckIn() {
                     />
                   </div>
 
-                  {/* Toplam Ücret */}
+                  {/* Gecelik Fiyat */}
                   <div>
-                    <Label htmlFor="totalPrice">Toplam Konaklama Ücreti (TL)</Label>
+                    <Label htmlFor="nightlyPrice">Gecelik Fiyat (TL)</Label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
                         ₺
                       </span>
                       <input
-                        id="totalPrice"
+                        id="nightlyPrice"
                         type="number"
                         required
                         min="0"
                         step="0.01"
-                        value={totalPrice}
-                        onChange={(e) => setTotalPrice(e.target.value)}
+                        value={nightlyPrice}
+                        onChange={(e) => setNightlyPrice(e.target.value)}
                         className={`${inputClass} pl-8 cursor-text`}
                         disabled={success}
                         placeholder="Örn: 5000"
