@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      folios: {
+        Row: {
+          closed_at: string | null
+          created_at: string | null
+          id: string
+          reservation_id: string
+          status: Database["public"]["Enums"]["folio_status"]
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reservation_id: string
+          status?: Database["public"]["Enums"]["folio_status"]
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reservation_id?: string
+          status?: Database["public"]["Enums"]["folio_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folios_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: true
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guests: {
         Row: {
           created_at: string | null
@@ -58,6 +90,45 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
+      }
+      reservation_guests: {
+        Row: {
+          created_at: string | null
+          guest_id: string
+          id: string
+          is_primary_guest: boolean
+          reservation_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          guest_id: string
+          id?: string
+          is_primary_guest?: boolean
+          reservation_id: string
+        }
+        Update: {
+          created_at?: string | null
+          guest_id?: string
+          id?: string
+          is_primary_guest?: boolean
+          reservation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_guests_guest_id_fkey"
+            columns: ["guest_id"]
+            isOneToOne: false
+            referencedRelation: "guests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_guests_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reservations: {
         Row: {
@@ -106,24 +177,68 @@ export type Database = {
       }
       rooms: {
         Row: {
+          bed_config: Database["public"]["Enums"]["bed_config_type"]
           hk_status: Database["public"]["Enums"]["hk_status"] | null
           id: string
           room_number: string
           type: Database["public"]["Enums"]["room_type"]
         }
         Insert: {
+          bed_config?: Database["public"]["Enums"]["bed_config_type"]
           hk_status?: Database["public"]["Enums"]["hk_status"] | null
           id?: string
           room_number: string
           type: Database["public"]["Enums"]["room_type"]
         }
         Update: {
+          bed_config?: Database["public"]["Enums"]["bed_config_type"]
           hk_status?: Database["public"]["Enums"]["hk_status"] | null
           id?: string
           room_number?: string
           type?: Database["public"]["Enums"]["room_type"]
         }
         Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          folio_id: string
+          id: string
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          folio_id: string
+          id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          folio_id?: string
+          id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          transaction_type?: Database["public"]["Enums"]["transaction_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -133,9 +248,19 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      bed_config_type:
+        | "SINGLE"
+        | "DOUBLE"
+        | "TWIN"
+        | "DOUBLE_SINGLE"
+        | "DOUBLE_TWIN"
+        | "TRIPLE"
+      folio_status: "OPEN" | "CLOSED" | "SETTLED"
       hk_status: "CLEAN" | "DIRTY" | "INSPECTED"
+      payment_method: "CASH" | "CREDIT_CARD" | "BANK_TRANSFER" | "CITY_LEDGER"
       reservation_status: "PENDING" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED"
       room_type: "STANDARD" | "SUITE" | "FAMILY"
+      transaction_type: "ROOM_CHARGE" | "EXTRA" | "PAYMENT"
       user_role: "ADMIN" | "RECEPTIONIST" | "HOUSEKEEPER"
     }
     CompositeTypes: {
@@ -264,9 +389,20 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      bed_config_type: [
+        "SINGLE",
+        "DOUBLE",
+        "TWIN",
+        "DOUBLE_SINGLE",
+        "DOUBLE_TWIN",
+        "TRIPLE",
+      ],
+      folio_status: ["OPEN", "CLOSED", "SETTLED"],
       hk_status: ["CLEAN", "DIRTY", "INSPECTED"],
+      payment_method: ["CASH", "CREDIT_CARD", "BANK_TRANSFER", "CITY_LEDGER"],
       reservation_status: ["PENDING", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"],
       room_type: ["STANDARD", "SUITE", "FAMILY"],
+      transaction_type: ["ROOM_CHARGE", "EXTRA", "PAYMENT"],
       user_role: ["ADMIN", "RECEPTIONIST", "HOUSEKEEPER"],
     },
   },

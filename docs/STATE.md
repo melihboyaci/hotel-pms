@@ -4,8 +4,8 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 3: Temel Operasyonel Modüller
-- **Detay:** Resepsiyon Dashboard'un geliştirilmesi (gerçek verilerin tam bağlanması), Günlük Özet Raporu ve Housekeeping panosunun detaylandırılması.
+- **Durum:** Faz 3.1 tamamlandı.
+- **Son Yapılanlar:** `Rooms.tsx` sayfasına yapısal yatak konfigürasyonu (`bed_config`) ve güvenlik kontrollü oda silme özelliği eklendi. Supabase DB ve Types güncellendi.
 
 ## Alınan Kararlar (Değiştirilemez)
 
@@ -15,6 +15,8 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 - **LLM:** DeepSeek V4 Flash.
 - **RAG:** Ayrı Python mikroservisi olarak konumlandırılacak.
 - **Sistem-of-Record:** Check-in/out ve gelir/gider verilerinin ana kaynağı HMS olarak kalacak. Bu sistem sadece operasyonel yansıma ve özet sunacak.
+- **Folyo Finansal Kurallar:** Borçlar pozitif (+), tahsilatlar negatif (−) amount olarak kaydedilir. transaction_type: ROOM_CHARGE | EXTRA | PAYMENT. Tahsilatlarda payment_method zorunludur.
+- **UI Mimarisi:** Sidebar-layout (App.tsx) + Outlet pattern. Login hariç tüm sayfalar sidebar ile birlikte render edilir. Tekil Rezervasyon ve Folyo profili `ReservationDetail.tsx` (Detay Görüntüle) üzerinde birleştirilmiştir.
 
 ## Bekleyen Sorular / Riskler
 
@@ -23,4 +25,9 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Son Güncelleme
 
-Faz 2 tamamen tamamlandı. React Router kurularak sayfa yönlendirmeleri eklendi. Supabase Auth kullanılarak Hera City Hotel temalı 'Kullanıcı Adı' odaklı (e-posta türeten) Login sayfası oluşturuldu. Oturum kontrolü için ProtectedRoute eklendi. Artık Faz 3 (Operasyonel Modüller) aşamasına geçiliyor.
+- `ReservationDetail.tsx` ekranında "Detay Görüntüle" (Rezervasyon & Folyo birleşik profili) tamamlandı.
+- Header kısmına "Oda Check-out" butonu ve bakiye validasyonu eklendi.
+- `CheckIn.tsx` formuna Akıllı Misafir Arama (Autocomplete) bileşeni entegre edildi.
+- `Guests.tsx` sayfasına "Yeni Misafir" ekleme modalı eklendi.
+- `Rooms.tsx` sayfasına "Yeni Oda Ekle", "Oda Düzenle", yatak konfigürasyonu (`bed_config`) ve güvenlik kontrollü oda silme özellikleri eklendi.
+- Supabase veri tipleri (`database.types.ts`) güncellendi.

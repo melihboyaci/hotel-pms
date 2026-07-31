@@ -2,7 +2,7 @@
 
 @theme {
   --font-cinzel: 'Cinzel', serif;
-  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-sans: 'Inter', sans-serif;
 
   --color-gold-300: #d6b46b;
   --color-gold-400: #b89343;
@@ -20,7 +20,7 @@
 
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   background-color: #ffffff;
   color: #1f2937;
 }
