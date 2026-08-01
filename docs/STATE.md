@@ -4,11 +4,9 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 3.1.5 (Gelecek Tarihli Rezervasyon Yönetimi).
-- **Detay:** `Reservations.tsx` sayfasına "Yeni Rezervasyon Ekle" butonu ile tablodaki kayıtlar için "Düzenle" ve "İptal" aksiyonları eklenecek.
-- **Kritik:**
-  1. Yeni rezervasyon modalı, Check-in gibi anında `CHECKED_IN` ve `DIRTY` yapmaz. Sadece `status: 'PENDING'` olarak kaydeder.
-  2. Tablodaki "İşlemler" sütununda rezervasyon tarihini/odasını güncelleyen "Düzenle" ve statüyü `CANCELLED` yapan "İptal Et" butonları olacak.
+- **Hedef:** Faz 3.1.6 (Rezervasyon Kalıcı Silme / Hard Delete).
+- **Detay:** `Reservations.tsx` sayfasına hatalı kayıtları veritabanından tamamen silmek için "Kalıcı Sil" butonu eklenecek.
+- **Kritik Güvenlik:** Sadece `PENDING` (Bekliyor) veya `CANCELLED` (İptal) statüsündeki rezervasyonlar silinebilir. İçerideki (`CHECKED_IN`) veya çıkış yapmış (`CHECKED_OUT`) misafirlerin silinmesi buton bazında engellenecektir.
 
 ## Alınan Kararlar (Değiştirilemez)
 

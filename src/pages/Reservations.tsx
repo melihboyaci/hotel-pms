@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Loader2, CalendarDays, ExternalLink, Plus, X, Pencil, XCircle, AlertTriangle, UserPlus } from 'lucide-react'
+import { Search, Loader2, CalendarDays, ExternalLink, Plus, X, Pencil, XCircle, AlertTriangle, UserPlus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
 import { useNavigate } from 'react-router-dom'
@@ -185,6 +185,11 @@ export default function Reservations() {
   const [cancelConfirm, setCancelConfirm] = useState<ReservationWithDetails | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
 
+  // Delete modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<ReservationWithDetails | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const today = new Date().toISOString().split('T')[0]
 
   const fetchReservations = async () => {
@@ -364,6 +369,35 @@ export default function Reservations() {
     }
   }
 
+  // --- Delete (Hard Delete) ---
+  const handleDeleteReservation = async () => {
+    if (!deleteConfirm) return
+    setDeleteLoading(true)
+    setDeleteError(null)
+
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('id', deleteConfirm.id)
+
+      if (error) {
+        if (error.code === '23503' || error.message?.toLowerCase().includes('foreign key')) {
+           throw new Error('Bu rezervasyona bağlı folyo veya finansal işlemler olduğu için silinemez.')
+        }
+        throw error
+      }
+
+      setDeleteConfirm(null)
+      await fetchReservations()
+    } catch (err: any) {
+      console.error('Rezervasyon silinirken hata:', err)
+      setDeleteError(err?.message || 'Rezervasyon silinirken bir hata oluştu.')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   // --- Filter ---
   const filteredReservations = reservations.filter(res => {
     const guestName = res.guests ? `${res.guests.first_name} ${res.guests.last_name}`.toLowerCase() : ''
@@ -504,6 +538,19 @@ export default function Reservations() {
                                 className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                               >
                                 <XCircle size={16} />
+                              </button>
+                            )}
+                            {/* Delete (Hard Delete) — only for PENDING or CANCELLED */}
+                            {(res.status === 'PENDING' || res.status === 'CANCELLED') && (
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirm(res)
+                                  setDeleteError(null)
+                                }}
+                                title="Kalıcı Olarak Sil"
+                                className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                              >
+                                <Trash2 size={16} />
                               </button>
                             )}
                           </div>
@@ -818,6 +865,64 @@ export default function Reservations() {
                   className="flex items-center justify-center min-w-[120px] px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold tracking-wide uppercase hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {cancelLoading ? <Loader2 size={16} className="animate-spin" /> : 'Evet, İptal Et'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* Delete Confirmation Modal */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-rose-100">
+                  <AlertTriangle className="text-rose-600" size={24} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-gray-900 mb-1">Kalıcı Silme Onayı</h3>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-semibold text-gray-700">
+                      {deleteConfirm.guests
+                        ? `${deleteConfirm.guests.first_name} ${deleteConfirm.guests.last_name}`
+                        : deleteConfirm.id.split('-')[0].toUpperCase()}
+                    </span>{' '}
+                    adlı misafirin rezervasyonunu veritabanından tamamen silmek istediğinize emin misiniz? <br/><br/>
+                    <strong className="text-rose-600">Bu işlem geri alınamaz!</strong>
+                  </p>
+                </div>
+              </div>
+
+              {deleteError && (
+                <div className="mt-5 p-4 rounded-xl bg-rose-50 text-rose-700 text-sm border border-rose-200 font-medium flex items-start gap-2">
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirm(null)
+                    setDeleteError(null)
+                  }}
+                  disabled={deleteLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteReservation}
+                  disabled={deleteLoading}
+                  className="flex items-center justify-center min-w-[120px] px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold tracking-wide uppercase hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : 'Evet, Kalıcı Sil'}
                 </button>
               </div>
             </div>
