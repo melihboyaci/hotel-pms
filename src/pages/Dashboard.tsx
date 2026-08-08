@@ -12,6 +12,7 @@ import {
   MoreVertical,
   FolderOpen,
   CheckCircle2,
+  X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -145,9 +146,11 @@ function BalanceBadge({ balance }: { balance: number }) {
 function RoomCard({
   room,
   onNavigateDetail,
+  onClick,
 }: {
   room: RoomWithReservations
   onNavigateDetail: (reservationId: string) => void
+  onClick: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const hk = HK_CONFIG[room.hk_status ?? 'DIRTY']
@@ -161,7 +164,8 @@ function RoomCard({
 
   return (
     <div
-      className={`flex flex-col gap-2.5 rounded-xl border-2 bg-white p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-gold-400 ${isOccupied ? 'border-gold-400/70' : hk.borderClass}`}
+      onClick={onClick}
+      className={`flex flex-col gap-2.5 rounded-xl border-2 bg-white p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-gold-400 cursor-pointer ${isOccupied ? 'border-gold-400/70' : hk.borderClass}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-2">
@@ -179,7 +183,7 @@ function RoomCard({
             }
           }}>
             <button
-              onClick={() => setMenuOpen(!menuOpen)}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
               className="p-1 rounded-lg text-gray-400 hover:text-gold-600 hover:bg-gold-50 transition-colors cursor-pointer focus:outline-none"
             >
               <MoreVertical size={18} />
@@ -187,7 +191,7 @@ function RoomCard({
             {menuOpen && (
               <div className="absolute right-0 top-8 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
                 <button
-                  onMouseDown={() => onNavigateDetail(activeReservation.id)}
+                  onMouseDown={(e) => { e.stopPropagation(); onNavigateDetail(activeReservation.id); }}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 font-medium hover:bg-gold-50 hover:text-gold-700 w-full text-left cursor-pointer transition-colors"
                 >
                   <FolderOpen size={15} className="text-gold-500" />
@@ -259,6 +263,105 @@ function StatusBadge({ status, count }: { status: HkStatus; count: number }) {
   )
 }
 
+function QuickActionModal({
+  room,
+  onClose,
+  onRefresh,
+}: {
+  room: RoomWithReservations
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+
+  const activeReservation = room.reservations[0] ?? null
+  const isOccupied = activeReservation !== null
+  const isAvailable = !isOccupied
+  const isClean = room.hk_status === 'CLEAN'
+  const isDirty = room.hk_status === 'DIRTY'
+
+  const handleMarkClean = async () => {
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .update({ hk_status: 'CLEAN' })
+        .eq('id', room.id)
+      
+      if (error) throw error
+      onRefresh()
+      onClose()
+    } catch (err: any) {
+      alert(err.message || 'Oda durumu güncellenemedi.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFastCheckIn = () => {
+    navigate(`/check-in?roomId=${room.id}`)
+  }
+
+  const handleGoToFolio = () => {
+    if (activeReservation) {
+      navigate(`/folio/${activeReservation.id}`)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <h2 className="text-lg font-bold text-gray-800 font-cinzel">Oda İşlemleri: #{room.room_number}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        
+        <div className="p-5 flex flex-col gap-3">
+          {isAvailable && isClean && (
+            <button
+              onClick={handleFastCheckIn}
+              className="w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md hover:-translate-y-0.5"
+            >
+              <User size={18} />
+              Hızlı Check-in
+            </button>
+          )}
+
+          {isOccupied && (
+            <button
+              onClick={handleGoToFolio}
+              className="w-full flex items-center justify-center gap-2.5 bg-gold-600 hover:bg-gold-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md hover:-translate-y-0.5"
+            >
+              <Receipt size={18} />
+              Folyoya Git
+            </button>
+          )}
+
+          {isDirty && (
+            <button
+              onClick={handleMarkClean}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            >
+              <Sparkles size={18} />
+              {loading ? 'İşleniyor...' : 'Temiz İşaretle'}
+            </button>
+          )}
+
+          {!(isAvailable && isClean) && !isOccupied && !isDirty && (
+            <div className="text-center py-4 text-gray-500 text-sm font-medium">
+              Bu oda için kullanılabilecek hızlı işlem bulunmuyor.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Ana Sayfa ---
 
 export default function Dashboard() {
@@ -266,6 +369,7 @@ export default function Dashboard() {
   const [rooms, setRooms] = useState<RoomWithReservations[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedRoom, setSelectedRoom] = useState<RoomWithReservations | null>(null)
 
   const fetchRooms = async () => {
     setLoading(true)
@@ -412,9 +516,18 @@ export default function Dashboard() {
               key={room.id}
               room={room}
               onNavigateDetail={(resId) => navigate(`/reservation/${resId}`)}
+              onClick={() => setSelectedRoom(room)}
             />
           ))}
         </div>
+      )}
+
+      {selectedRoom && (
+        <QuickActionModal
+          room={selectedRoom}
+          onClose={() => setSelectedRoom(null)}
+          onRefresh={fetchRooms}
+        />
       )}
     </div>
   )

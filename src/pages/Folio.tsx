@@ -17,6 +17,8 @@ import {
   Scale,
   BedDouble,
   Coffee,
+  X,
+  ShoppingBag,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -212,14 +214,15 @@ export default function FolioPage() {
   // Aktif sekme
   const [activeTab, setActiveTab] = useState<FolioTab>('ALL')
 
-  // Form state'leri
-  const [formMode, setFormMode] = useState<'CHARGE' | 'PAYMENT'>('CHARGE')
-  const [txType, setTxType] = useState<TransactionType>('ROOM_CHARGE')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
-  const [amount, setAmount] = useState('')
-  const [description, setDescription] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  // Modal state'leri
+  const [showExtraModal, setShowExtraModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [modalAmount, setModalAmount] = useState('')
+  const [modalDescription, setModalDescription] = useState('')
+  const [modalPaymentMethod, setModalPaymentMethod] = useState<PaymentMethod>('CASH')
+  const [modalSubmitting, setModalSubmitting] = useState(false)
 
   // --- Veri çekme ---
   const fetchFolioData = useCallback(async () => {
@@ -299,48 +302,41 @@ export default function FolioPage() {
         ? extraCharges
         : transactions
 
-  // --- İşlem ekleme ---
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+
+  // --- Modal üzerinden işlem ekleme ---
+  const handleModalSubmit = async (type: 'EXTRA' | 'PAYMENT') => {
     if (!folio) return
 
-    setSubmitting(true)
-    setSubmitSuccess(false)
-    setError(null)
+    const numericAmount = parseFloat(modalAmount)
+    if (isNaN(numericAmount) || numericAmount <= 0) return
 
-    const numericAmount = parseFloat(amount)
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      setError('Lütfen geçerli bir tutar giriniz.')
-      setSubmitting(false)
-      return
-    }
+    setModalSubmitting(true)
 
     try {
       const payload: TransactionInsert = {
         folio_id: folio.id,
-        transaction_type: formMode === 'PAYMENT' ? 'PAYMENT' : txType,
-        // Borçlar pozitif, tahsilatlar negatif olarak kaydedilir
-        amount: formMode === 'PAYMENT' ? -numericAmount : numericAmount,
-        description: description.trim() || null,
-        payment_method: formMode === 'PAYMENT' ? paymentMethod : null,
+        transaction_type: type,
+        amount: type === 'PAYMENT' ? -numericAmount : numericAmount,
+        description: modalDescription.trim() || null,
+        payment_method: type === 'PAYMENT' ? modalPaymentMethod : null,
       }
 
       const { error: insertError } = await supabase.from('transactions').insert(payload)
+      if (insertError) throw new Error(insertError.message)
 
-      if (insertError) {
-        throw new Error(`İşlem kaydedilemedi: ${insertError.message}`)
-      }
-
-      // Başarılı — formu sıfırla ve verileri yenile
-      setAmount('')
-      setDescription('')
+      // Temizle ve kapat
+      setModalAmount('')
+      setModalDescription('')
+      setModalPaymentMethod('CASH')
+      setShowExtraModal(false)
+      setShowPaymentModal(false)
       setSubmitSuccess(true)
       setTimeout(() => setSubmitSuccess(false), 3000)
       await fetchFolioData()
     } catch (err: any) {
-      setError(err?.message || 'Beklenmeyen bir hata oluştu.')
+      setError(err?.message || 'İşlem kaydedilemedi.')
     } finally {
-      setSubmitting(false)
+      setModalSubmitting(false)
     }
   }
 
@@ -491,48 +487,36 @@ export default function FolioPage() {
           </div>
         )}
 
-        {/* ═══ Özet Kartları (4'lü) ═══ */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Konaklama */}
-          <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <BedDouble size={15} className="text-amber-500" />
-              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
-                Konaklama
-              </span>
-            </div>
-            <p className="text-xl font-bold text-amber-800 font-cinzel">
-              {formatCurrency(totalRoomCharge)}
-            </p>
-            <p className="text-[10px] text-amber-500 mt-1">{roomCharges.length} işlem</p>
-          </div>
-
-          {/* Ekstra Harcamalar */}
+        {/* ═══ Özet Kartları (3'lü) + Aksiyon Butonları ═══ */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* Toplam Harcama */}
           <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
-              <Coffee size={15} className="text-rose-500" />
+              <TrendingUp size={15} className="text-rose-500" />
               <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">
-                Ekstra
+                Toplam Harcama
               </span>
             </div>
             <p className="text-xl font-bold text-rose-800 font-cinzel">
-              {formatCurrency(totalExtra)}
+              {formatCurrency(totalCharges)}
             </p>
-            <p className="text-[10px] text-rose-500 mt-1">{extraCharges.length} işlem</p>
+            <p className="text-[10px] text-rose-400 mt-1">
+              Konaklama: {formatCurrency(totalRoomCharge)} + Ekstra: {formatCurrency(totalExtra)}
+            </p>
           </div>
 
-          {/* Toplam Tahsilat */}
+          {/* Toplam Ödenen */}
           <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown size={15} className="text-emerald-500" />
               <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
-                Tahsilat
+                Toplam Ödenen
               </span>
             </div>
             <p className="text-xl font-bold text-emerald-800 font-cinzel">
               {formatCurrency(totalPayments)}
             </p>
-            <p className="text-[10px] text-emerald-500 mt-1">{payments.length} işlem</p>
+            <p className="text-[10px] text-emerald-400 mt-1">{payments.length} tahsilat işlemi</p>
           </div>
 
           {/* Kalan Bakiye */}
@@ -565,7 +549,7 @@ export default function FolioPage() {
                       : 'text-blue-600'
                 }`}
               >
-                Net Bakiye
+                Kalan Bakiye
               </span>
             </div>
             <p
@@ -589,10 +573,28 @@ export default function FolioPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* ═══ Sol Sütun: Hesap Dökümü (3/5) ═══ */}
-          <div className="lg:col-span-3 space-y-0">
-            {/* Sekmeler */}
+        {/* Hızlı Aksiyon Butonları */}
+        <div className="flex flex-wrap gap-3 mb-8">
+          <button
+            type="button"
+            onClick={() => setShowExtraModal(true)}
+            className="flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          >
+            <ShoppingBag size={16} />
+            Ekstra Ekle
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPaymentModal(true)}
+            className="flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Wallet size={16} />
+            Tahsilat Al
+          </button>
+        </div>
+
+        <div className="space-y-0">
+          {/* Sekmeler */}
             <div className="bg-white rounded-t-2xl border border-b-0 border-gray-200 shadow-sm overflow-hidden">
               <div className="flex border-b border-gray-100">
                 {(
@@ -673,187 +675,158 @@ export default function FolioPage() {
               </div>
             )}
           </div>
-
-          {/* ═══ Sağ Sütun: İşlem Ekle (2/5) ═══ */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm lg:sticky lg:top-8">
-              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
-                <PlusCircle size={18} className="text-gold-500" />
-                <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                  İşlem Ekle
-                </h2>
+        </div>
+      {/* ═══ Ekstra Ekle Modalı ═══ */}
+      {showExtraModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowExtraModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-blue-50/50">
+              <div className="flex items-center gap-2.5">
+                <ShoppingBag size={18} className="text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-800 font-cinzel">Ekstra Ekle</h2>
               </div>
-
-              {/* Mod Seçici */}
-              <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormMode('CHARGE')
-                    setTxType('ROOM_CHARGE')
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-                    formMode === 'CHARGE'
-                      ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <TrendingUp size={15} />
-                  Borç Ekle
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormMode('PAYMENT')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-                    formMode === 'PAYMENT'
-                      ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <TrendingDown size={15} />
-                  Tahsilat
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* İşlem Tipi (Borç modunda) */}
-                {formMode === 'CHARGE' && (
-                  <div>
-                    <Label htmlFor="folio-txType">İşlem Tipi</Label>
-                    <select
-                      id="folio-txType"
-                      required
-                      value={txType}
-                      onChange={(e) => setTxType(e.target.value as TransactionType)}
-                      className={`${inputClass} cursor-pointer`}
-                    >
-                      <option value="ROOM_CHARGE">Oda Ücreti</option>
-                      <option value="EXTRA">Ekstra Harcama (Minibar, Restoran vb.)</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Ödeme Yöntemi (Tahsilat modunda) */}
-                {formMode === 'PAYMENT' && (
-                  <div>
-                    <Label htmlFor="folio-paymentMethod">Ödeme Yöntemi</Label>
-                    <select
-                      id="folio-paymentMethod"
-                      required
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className={`${inputClass} cursor-pointer`}
-                    >
-                      <option value="CASH">Nakit</option>
-                      <option value="CREDIT_CARD">Kredi Kartı</option>
-                      <option value="BANK_TRANSFER">Havale / EFT</option>
-                      <option value="CITY_LEDGER">Cari Hesap</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Tutar */}
-                <div>
-                  <Label htmlFor="folio-amount">Tutar (₺)</Label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
-                      ₺
-                    </span>
-                    <input
-                      id="folio-amount"
-                      type="number"
-                      required
-                      min="0.01"
-                      step="0.01"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className={`${inputClass} pl-8`}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                {/* Açıklama */}
-                <div>
-                  <Label htmlFor="folio-description">Açıklama</Label>
+              <button onClick={() => setShowExtraModal(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <Label htmlFor="modal-extra-amount">Tutar (₺)</Label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₺</span>
                   <input
-                    id="folio-description"
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className={inputClass}
-                    placeholder={
-                      formMode === 'CHARGE'
-                        ? 'Örn: Minibar, Oda servisi…'
-                        : 'Örn: Nakit tahsilat…'
-                    }
+                    id="modal-extra-amount"
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={modalAmount}
+                    onChange={(e) => setModalAmount(e.target.value)}
+                    className={`${inputClass} pl-8`}
+                    placeholder="0.00"
+                    autoFocus
                   />
                 </div>
-
-                {/* Özet kutusu */}
-                {amount && parseFloat(amount) > 0 && (
-                  <div
-                    className={`rounded-lg border px-4 py-3 ${
-                      formMode === 'PAYMENT'
-                        ? 'bg-emerald-50/70 border-emerald-200'
-                        : 'bg-amber-50/70 border-amber-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span
-                        className={formMode === 'PAYMENT' ? 'text-emerald-600' : 'text-amber-600'}
-                      >
-                        {formMode === 'PAYMENT' ? 'Tahsil edilecek' : 'Borçlandırılacak'}
-                      </span>
-                      <span
-                        className={`font-bold text-sm ${
-                          formMode === 'PAYMENT' ? 'text-emerald-700' : 'text-amber-700'
-                        }`}
-                      >
-                        {formMode === 'PAYMENT' ? '−' : '+'}{' '}
-                        {formatCurrency(parseFloat(amount))}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-gray-200/50">
-                      <span className="text-gray-500">İşlem sonrası bakiye</span>
-                      <span className="font-bold text-sm text-gray-800">
-                        {formatCurrency(
-                          formMode === 'PAYMENT'
-                            ? balance - parseFloat(amount)
-                            : balance + parseFloat(amount)
-                        )}
-                      </span>
-                    </div>
+              </div>
+              <div>
+                <Label htmlFor="modal-extra-desc">Açıklama</Label>
+                <input
+                  id="modal-extra-desc"
+                  type="text"
+                  value={modalDescription}
+                  onChange={(e) => setModalDescription(e.target.value)}
+                  className={inputClass}
+                  placeholder="Örn: Minibar, Restoran, Oda Servisi…"
+                />
+              </div>
+              {modalAmount && parseFloat(modalAmount) > 0 && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-blue-600">Borçlandırılacak</span>
+                    <span className="font-bold text-sm text-blue-700">+ {formatCurrency(parseFloat(modalAmount))}</span>
                   </div>
-                )}
-
-                {/* Kaydet Butonu */}
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className={`w-full flex items-center justify-center gap-2.5 font-bold tracking-widest uppercase px-8 py-3.5 rounded-xl border shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 cursor-pointer ${
-                    formMode === 'PAYMENT'
-                      ? 'bg-emerald-700 text-white border-emerald-600 hover:bg-emerald-800 focus:ring-emerald-500'
-                      : 'bg-black text-gold-400 border-gold-500/30 hover:bg-gray-900 hover:text-gold-300 focus:ring-gold-500'
-                  }`}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Kaydediliyor…
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={18} />
-                      {formMode === 'PAYMENT' ? 'Tahsilat Kaydet' : 'Borç Ekle'}
-                    </>
-                  )}
-                </button>
-              </form>
+                  <div className="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-blue-200/50">
+                    <span className="text-gray-500">İşlem sonrası bakiye</span>
+                    <span className="font-bold text-sm text-gray-800">{formatCurrency(balance + parseFloat(modalAmount))}</span>
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={modalSubmitting || !modalAmount || parseFloat(modalAmount) <= 0}
+                onClick={() => handleModalSubmit('EXTRA')}
+                className="w-full flex items-center justify-center gap-2.5 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {modalSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                {modalSubmitting ? 'Kaydediliyor…' : 'Ekstra Kaydet'}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ═══ Tahsilat Al Modalı ═══ */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowPaymentModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-emerald-50/50">
+              <div className="flex items-center gap-2.5">
+                <Wallet size={18} className="text-emerald-600" />
+                <h2 className="text-lg font-bold text-gray-800 font-cinzel">Tahsilat Al</h2>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <Label htmlFor="modal-payment-amount">Tutar (₺)</Label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₺</span>
+                  <input
+                    id="modal-payment-amount"
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={modalAmount}
+                    onChange={(e) => setModalAmount(e.target.value)}
+                    className={`${inputClass} pl-8`}
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="modal-payment-method">Ödeme Yöntemi</Label>
+                <select
+                  id="modal-payment-method"
+                  value={modalPaymentMethod}
+                  onChange={(e) => setModalPaymentMethod(e.target.value as PaymentMethod)}
+                  className={`${inputClass} cursor-pointer`}
+                >
+                  <option value="CASH">Nakit</option>
+                  <option value="CREDIT_CARD">Kredi Kartı</option>
+                  <option value="BANK_TRANSFER">Havale / EFT</option>
+                  <option value="CITY_LEDGER">Cari Hesap</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="modal-payment-desc">Açıklama (Opsiyonel)</Label>
+                <input
+                  id="modal-payment-desc"
+                  type="text"
+                  value={modalDescription}
+                  onChange={(e) => setModalDescription(e.target.value)}
+                  className={inputClass}
+                  placeholder="Örn: Nakit tahsilat…"
+                />
+              </div>
+              {modalAmount && parseFloat(modalAmount) > 0 && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-600">Tahsil edilecek</span>
+                    <span className="font-bold text-sm text-emerald-700">− {formatCurrency(parseFloat(modalAmount))}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-emerald-200/50">
+                    <span className="text-gray-500">İşlem sonrası bakiye</span>
+                    <span className="font-bold text-sm text-gray-800">{formatCurrency(balance - parseFloat(modalAmount))}</span>
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={modalSubmitting || !modalAmount || parseFloat(modalAmount) <= 0}
+                onClick={() => handleModalSubmit('PAYMENT')}
+                className="w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {modalSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                {modalSubmitting ? 'Kaydediliyor…' : 'Tahsilat Kaydet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

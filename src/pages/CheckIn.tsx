@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   UserPlus,
   CalendarCheck,
@@ -149,6 +149,7 @@ function GuestAutocompleteInput({
 
 export default function CheckIn() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // Oda verileri
   const [rooms, setRooms] = useState<Room[]>([])
@@ -161,7 +162,7 @@ export default function CheckIn() {
   const [companions, setCompanions] = useState<GuestFormData[]>([])
 
   // Rezervasyon bilgileri
-  const [roomId, setRoomId] = useState('')
+  const [roomId, setRoomId] = useState(searchParams.get('roomId') || '')
   const [checkInDate, setCheckInDate] = useState('')
   const [checkOutDate, setCheckOutDate] = useState('')
   const [nightlyPrice, setNightlyPrice] = useState('')

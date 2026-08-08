@@ -22,6 +22,7 @@ import ReservationDetail from './pages/ReservationDetail'
 import Rooms from './pages/Rooms'
 import Guests from './pages/Guests'
 import Reservations from './pages/Reservations'
+import Transactions from './pages/Transactions'
 
 // --- Dummy placeholder bileşenleri (henüz geliştirilmemiş sayfalar) ---
 
@@ -55,14 +56,7 @@ function AgencyPage() {
   )
 }
 
-function TransactionsPage() {
-  return (
-    <PlaceholderPage
-      title="Hareketler"
-      icon={<ArrowLeftRight size={32} className="text-gold-500" />}
-    />
-  )
-}
+
 
 // --- Korumalı Rota Bileşeni ---
 
@@ -242,7 +236,7 @@ function App() {
             <Route path="guests" element={<Guests />} />
             <Route path="reservations" element={<Reservations />} />
             <Route path="agency" element={<AgencyPage />} />
-            <Route path="transactions" element={<TransactionsPage />} />
+            <Route path="transactions" element={<Transactions />} />
           </Route>
         </Routes>
       </BrowserRouter>

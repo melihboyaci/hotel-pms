@@ -4,9 +4,11 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 3.1.6 (Rezervasyon Kalıcı Silme / Hard Delete).
-- **Detay:** `Reservations.tsx` sayfasına hatalı kayıtları veritabanından tamamen silmek için "Kalıcı Sil" butonu eklenecek.
-- **Kritik Güvenlik:** Sadece `PENDING` (Bekliyor) veya `CANCELLED` (İptal) statüsündeki rezervasyonlar silinebilir. İçerideki (`CHECKED_IN`) veya çıkış yapmış (`CHECKED_OUT`) misafirlerin silinmesi buton bazında engellenecektir.
+- **Hedef:** Faz 3.4 (Folyo / Oda Hesabı Ekranı).
+- **Detay:** `src/pages/Folio.tsx` sayfası; seçili rezervasyonun tüm finansal detaylarını, bakiyesini ve işlemlerini yönetecek operasyonel bir ekran olarak kodlanacak.
+- **Kritik:**
+  1. Odanın "Toplam Borç", "Toplam Tahsilat" ve "Kalan Bakiye" bilgileri net kartlar halinde gösterilecek.
+  2. "Ekstra Ekle" ve "Tahsilat Al" butonları ile modal üzerinden `transactions` tablosuna anında işlem girilebilecek.
 
 ## Alınan Kararlar (Değiştirilemez)
 
