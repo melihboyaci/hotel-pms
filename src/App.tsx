@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Receipt,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Dashboard from './pages/Dashboard'
@@ -23,6 +24,7 @@ import Rooms from './pages/Rooms'
 import Guests from './pages/Guests'
 import Reservations from './pages/Reservations'
 import Transactions from './pages/Transactions'
+import CityLedger from './pages/CityLedger'
 
 // --- Dummy placeholder bileşenleri (henüz geliştirilmemiş sayfalar) ---
 
@@ -46,17 +48,6 @@ function PlaceholderPage({ title, icon }: { title: string; icon: React.ReactNode
     </div>
   )
 }
-
-function AgencyPage() {
-  return (
-    <PlaceholderPage
-      title="Acente / Cari"
-      icon={<Building2 size={32} className="text-gold-500" />}
-    />
-  )
-}
-
-
 
 // --- Korumalı Rota Bileşeni ---
 
@@ -95,7 +86,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Odalar', path: '/rooms', icon: <BedDouble size={20} /> },
   { label: 'Misafirler', path: '/guests', icon: <Users size={20} /> },
   { label: 'Rezervasyonlar', path: '/reservations', icon: <CalendarRange size={20} /> },
-  { label: 'Acente / Cari', path: '/agency', icon: <Building2 size={20} /> },
+  { label: 'Cari Hesaplar', path: '/city-ledger', icon: <Receipt size={20} /> },
   { label: 'Hareketler', path: '/transactions', icon: <ArrowLeftRight size={20} /> },
 ]
 
@@ -235,7 +226,7 @@ function App() {
             <Route path="rooms" element={<Rooms />} />
             <Route path="guests" element={<Guests />} />
             <Route path="reservations" element={<Reservations />} />
-            <Route path="agency" element={<AgencyPage />} />
+            <Route path="city-ledger" element={<CityLedger />} />
             <Route path="transactions" element={<Transactions />} />
           </Route>
         </Routes>

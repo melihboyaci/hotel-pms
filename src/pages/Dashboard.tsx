@@ -26,6 +26,8 @@ type RoomType = Database['public']['Enums']['room_type']
 
 // Join sorgusundan dönen veri tipi (folios → transactions dahil)
 type ReservationWithGuests = Pick<Reservation, 'id' | 'check_in_date' | 'check_out_date' | 'status'> & {
+  channel: string | null
+  agency_name: string | null
   reservation_guests: {
     is_primary_guest: boolean
     guests: Pick<Guest, 'first_name' | 'last_name'> | null
@@ -224,6 +226,11 @@ function RoomCard({
                 </div>
               ))}
             </div>
+            {activeReservation.channel === 'AGENCY' && activeReservation.agency_name && (
+              <span className="inline-flex items-center gap-1 self-start px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[10px] font-bold text-indigo-700">
+                🌐 {activeReservation.agency_name}
+              </span>
+            )}
             <div className="flex items-center gap-2">
               <CalendarX size={13} className="text-gray-400" />
               <span className="text-[10px] font-medium text-gray-500">
@@ -387,6 +394,8 @@ export default function Dashboard() {
             check_in_date,
             check_out_date,
             status,
+            channel,
+            agency_name,
             reservation_guests!inner (
               is_primary_guest,
               guests!inner ( first_name, last_name )

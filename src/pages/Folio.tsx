@@ -19,6 +19,7 @@ import {
   Coffee,
   X,
   ShoppingBag,
+  LogOut,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -37,6 +38,8 @@ type FolioWithReservation = Folio & {
     check_out_date: string
     status: string | null
     room_id: string
+    channel: string | null
+    agency_name: string | null
     rooms: { room_number: string } | null
     reservation_guests: {
       is_primary_guest: boolean
@@ -216,6 +219,11 @@ export default function FolioPage() {
 
   const [submitSuccess, setSubmitSuccess] = useState(false)
 
+  // Check-out state'leri
+  const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false)
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false)
+  const [toastError, setToastError] = useState<string | null>(null)
+
   // Modal state'leri
   const [showExtraModal, setShowExtraModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -243,6 +251,8 @@ export default function FolioPage() {
             check_out_date,
             status,
             room_id,
+            channel,
+            agency_name,
             rooms ( room_number ),
             reservation_guests (
               is_primary_guest,
@@ -345,6 +355,46 @@ export default function FolioPage() {
   const primaryGuest = reservation?.reservation_guests?.find((rg) => rg.is_primary_guest)?.guests
   const roomNumber = reservation?.rooms?.room_number
 
+  // --- Check-Out işlemi ---
+  const handleCheckout = async () => {
+    if (!folio || !reservation) return
+
+    // Bakiye kontrolü (güvenlik kilidi)
+    if (balance > 0) {
+      setToastError('Lütfen önce kalan bakiyeyi tahsil edin veya Cari Hesaba aktarın!')
+      setTimeout(() => setToastError(null), 5000)
+      setShowCheckoutConfirm(false)
+      return
+    }
+
+    setCheckoutSubmitting(true)
+    try {
+      // 1. Rezervasyon statüsünü CHECKED_OUT yap
+      const { error: resError } = await supabase
+        .from('reservations')
+        .update({ status: 'CHECKED_OUT' })
+        .eq('id', reservation.id)
+
+      if (resError) throw new Error(`Rezervasyon güncellenemedi: ${resError.message}`)
+
+      // 2. Odanın hk_status'unu DIRTY yap
+      const { error: roomError } = await supabase
+        .from('rooms')
+        .update({ hk_status: 'DIRTY' })
+        .eq('id', reservation.room_id)
+
+      if (roomError) throw new Error(`Oda durumu güncellenemedi: ${roomError.message}`)
+
+      // 3. Başarılı — Pano'ya yönlendir
+      navigate('/')
+    } catch (err: any) {
+      setError(err?.message || 'Check-out işlemi başarısız.')
+      setShowCheckoutConfirm(false)
+    } finally {
+      setCheckoutSubmitting(false)
+    }
+  }
+
   // --- RENDER ---
 
   if (loading) {
@@ -394,13 +444,32 @@ export default function FolioPage() {
               Folyo Hesabı
             </h1>
           </div>
-          <button
-            onClick={fetchFolioData}
-            className="flex items-center gap-2 rounded-lg border border-gold-500/40 bg-white px-4 py-2 text-sm font-semibold text-gold-600 hover:bg-gold-50 shadow-sm transition-colors cursor-pointer"
-          >
-            <RefreshCw size={14} />
-            Yenile
-          </button>
+          <div className="flex items-center gap-3">
+            {reservation?.status === 'CHECKED_IN' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (balance > 0) {
+                    setToastError('Lütfen önce kalan bakiyeyi tahsil edin veya Cari Hesaba aktarın!')
+                    setTimeout(() => setToastError(null), 5000)
+                  } else {
+                    setShowCheckoutConfirm(true)
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-rose-600 hover:bg-rose-700 px-5 py-2 text-sm font-bold text-white shadow-sm transition-all hover:shadow-md cursor-pointer"
+              >
+                <LogOut size={16} />
+                Check-Out Yap
+              </button>
+            )}
+            <button
+              onClick={fetchFolioData}
+              className="flex items-center gap-2 rounded-lg border border-gold-500/40 bg-white px-4 py-2 text-sm font-semibold text-gold-600 hover:bg-gold-50 shadow-sm transition-colors cursor-pointer"
+            >
+              <RefreshCw size={14} />
+              Yenile
+            </button>
+          </div>
         </div>
       </div>
 
@@ -424,6 +493,11 @@ export default function FolioPage() {
                 <span className="font-semibold text-gray-800">
                   {primaryGuest.first_name} {primaryGuest.last_name}
                 </span>
+                {reservation.channel === 'AGENCY' && reservation.agency_name && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[10px] font-bold text-indigo-700">
+                    🌐 {reservation.agency_name}
+                  </span>
+                )}
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -468,6 +542,20 @@ export default function FolioPage() {
 
       {/* ─── Ana İçerik: İki Sütun ─── */}
       <div className="px-6 py-8">
+        {/* Toast hata mesajı (Check-out bakiye uyarısı) */}
+        {toastError && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border-2 border-rose-400 bg-rose-100 px-5 py-4 text-rose-900 animate-in fade-in shadow-lg">
+            <AlertCircle size={20} className="shrink-0 text-rose-600" />
+            <p className="font-bold text-sm">{toastError}</p>
+            <button
+              onClick={() => setToastError(null)}
+              className="ml-auto p-1 rounded-lg text-rose-400 hover:text-rose-700 hover:bg-rose-200 transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         {/* Hata mesajı (global) */}
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-xl border-2 border-rose-300 bg-rose-50 px-5 py-4 text-rose-800">
@@ -823,6 +911,57 @@ export default function FolioPage() {
                 {modalSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                 {modalSubmitting ? 'Kaydediliyor…' : 'Tahsilat Kaydet'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Check-Out Onay Modalı ═══ */}
+      {showCheckoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowCheckoutConfirm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 bg-rose-50/50">
+              <div className="flex items-center gap-2.5">
+                <LogOut size={18} className="text-rose-600" />
+                <h2 className="text-lg font-bold text-gray-800 font-cinzel">Check-Out Onayı</h2>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                <strong className="text-gray-800">
+                  {primaryGuest ? `${primaryGuest.first_name} ${primaryGuest.last_name}` : 'Misafir'}
+                </strong>
+                {roomNumber && <> — Oda <strong className="text-gold-700">#{roomNumber}</strong></>} için
+                çıkış işlemi yapılacaktır.
+              </p>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-emerald-600">Kalan Bakiye</span>
+                  <span className="font-bold text-sm text-emerald-700">{formatCurrency(balance)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">
+                Onayladığınızda rezervasyon <strong>CHECKED_OUT</strong> ve oda <strong>DIRTY</strong> durumuna geçecektir.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCheckoutConfirm(false)}
+                  disabled={checkoutSubmitting}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCheckout}
+                  disabled={checkoutSubmitting}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-sm transition-all hover:shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {checkoutSubmitting ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+                  {checkoutSubmitting ? 'İşleniyor…' : 'Check-Out Yap'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

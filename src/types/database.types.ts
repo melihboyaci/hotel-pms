@@ -132,6 +132,8 @@ export type Database = {
       }
       reservations: {
         Row: {
+          agency_name: string | null
+          channel: string | null
           check_in_date: string
           check_out_date: string
           guest_id: string
@@ -141,6 +143,8 @@ export type Database = {
           total_price: number | null
         }
         Insert: {
+          agency_name?: string | null
+          channel?: string | null
           check_in_date: string
           check_out_date: string
           guest_id: string
@@ -150,6 +154,8 @@ export type Database = {
           total_price?: number | null
         }
         Update: {
+          agency_name?: string | null
+          channel?: string | null
           check_in_date?: string
           check_out_date?: string
           guest_id?: string
@@ -207,6 +213,7 @@ export type Database = {
           description: string | null
           folio_id: string
           id: string
+          is_cleared: boolean | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
           transaction_type: Database["public"]["Enums"]["transaction_type"]
         }
@@ -217,6 +224,7 @@ export type Database = {
           description?: string | null
           folio_id: string
           id?: string
+          is_cleared?: boolean | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           transaction_type: Database["public"]["Enums"]["transaction_type"]
         }
@@ -227,6 +235,7 @@ export type Database = {
           description?: string | null
           folio_id?: string
           id?: string
+          is_cleared?: boolean | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           transaction_type?: Database["public"]["Enums"]["transaction_type"]
         }

@@ -4,11 +4,12 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 3.4 (Folyo / Oda Hesabı Ekranı).
-- **Detay:** `src/pages/Folio.tsx` sayfası; seçili rezervasyonun tüm finansal detaylarını, bakiyesini ve işlemlerini yönetecek operasyonel bir ekran olarak kodlanacak.
+- **Hedef:** Faz 3.6.1 (Cari Hesaplar - Acente Filtreleme ve Fatura Özeti).
+- **Detay:** `src/pages/CityLedger.tsx` sayfasına muhasebe standartlarında gelişmiş filtreleme eklenecek.
 - **Kritik:**
-  1. Odanın "Toplam Borç", "Toplam Tahsilat" ve "Kalan Bakiye" bilgileri net kartlar halinde gösterilecek.
-  2. "Ekstra Ekle" ve "Tahsilat Al" butonları ile modal üzerinden `transactions` tablosuna anında işlem girilebilecek.
+  1. Tablonun üstüne "Acente Adına Göre Ara" (Text/Select) ve "Durum" (Açık/Kapalı) filtreleri eklenecek.
+  2. Filtrelenen sonuçların toplam tutarını gösteren "Kesilecek Fatura Toplamı" isimli bir özet kartı olacak.
+  3. Tabloda acente adı (`folios.reservations.agency_name`) net bir şekilde gösterilecek.
 
 ## Alınan Kararlar (Değiştirilemez)
 
@@ -32,5 +33,5 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 - Header kısmına "Oda Check-out" butonu ve bakiye validasyonu eklendi.
 - `CheckIn.tsx` formuna Akıllı Misafir Arama (Autocomplete) bileşeni entegre edildi.
 - `Guests.tsx` sayfasına "Yeni Misafir" ekleme modalı eklendi.
-- `Rooms.tsx` sayfasına "Yeni Oda Ekle", "Oda Düzenle", yatak konfigürasyonu (`bed_config`) ve güvenlik kontrollü oda silme özellikleri eklendi.
-- Supabase veri tipleri (`database.types.ts`) güncellendi.
+- `Folio.tsx` ekranına "Check-Out Yap" butonu, bakiyeli çıkış güvenlik engeli (toast hata), Supabase statü güncellemeleri (`CHECKED_OUT` ve `DIRTY`) ve Cari Hesap desteği eklendi.
+- Supabase TypeScript veri tipleri (`database.types.ts`) `npx supabase gen types` ile başarıyla güncellendi ve derleme doğrulandı.

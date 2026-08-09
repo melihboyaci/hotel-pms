@@ -166,6 +166,8 @@ export default function CheckIn() {
   const [checkInDate, setCheckInDate] = useState('')
   const [checkOutDate, setCheckOutDate] = useState('')
   const [nightlyPrice, setNightlyPrice] = useState('')
+  const [channel, setChannel] = useState<'DIRECT' | 'AGENCY'>('DIRECT')
+  const [agencyName, setAgencyName] = useState('')
 
   // UI durumu
   const [submitting, setSubmitting] = useState(false)
@@ -210,6 +212,8 @@ export default function CheckIn() {
     setCheckInDate('')
     setCheckOutDate('')
     setNightlyPrice('')
+    setChannel('DIRECT')
+    setAgencyName('')
     setError(null)
     setSuccess(false)
     setCurrentStep(null)
@@ -274,6 +278,20 @@ export default function CheckIn() {
       // ═══════════════════════════════════════════════════
       setCurrentStep('Rezervasyon oluşturuluyor…')
 
+      const isFutureCheckIn = new Date(checkInDate) > new Date(today)
+      const finalStatus = isFutureCheckIn ? 'PENDING' : 'CHECKED_IN'
+      
+      // Toplam fiyatı hesapla
+      let totalAmount = 0
+      const pricePerNight = parseFloat(nightlyPrice)
+      if (pricePerNight && pricePerNight > 0) {
+        const checkInTime = new Date(checkInDate).getTime()
+        const checkOutTime = new Date(checkOutDate).getTime()
+        const diffDays = Math.ceil((checkOutTime - checkInTime) / (1000 * 60 * 60 * 24))
+        const totalNights = Math.max(1, diffDays)
+        totalAmount = pricePerNight * totalNights
+      }
+
       const { data: reservationData, error: reservationError } = await supabase
         .from('reservations')
         .insert({
@@ -281,7 +299,10 @@ export default function CheckIn() {
           room_id: roomId,
           check_in_date: checkInDate,
           check_out_date: checkOutDate,
-          status: 'CHECKED_IN',
+          status: finalStatus,
+          channel: channel,
+          agency_name: channel === 'AGENCY' ? agencyName.trim() || null : null,
+          total_price: totalAmount > 0 ? totalAmount : null,
         })
         .select('id')
         .single()
@@ -330,47 +351,44 @@ export default function CheckIn() {
       }
 
       // ═══════════════════════════════════════════════════
-      // AŞAMA 4: Folyo (hesap) aç
+      // AŞAMA 4 & 5: Sadece giriş yapıldıysa (CHECKED_IN) Folyo ve Oda Ücreti işle
       // ═══════════════════════════════════════════════════
-      setCurrentStep('Folyo hesabı açılıyor…')
+      if (finalStatus === 'CHECKED_IN') {
+        setCurrentStep('Folyo hesabı açılıyor…')
 
-      const { data: folioData, error: folioError } = await supabase
-        .from('folios')
-        .insert({
-          reservation_id: reservationId,
-          status: 'OPEN',
-        })
-        .select('id')
-        .single()
-
-      if (folioError) {
-        throw new Error(`Folyo oluşturulamadı: ${folioError.message}`)
-      }
-
-      // ═══════════════════════════════════════════════════
-      // AŞAMA 5: Oda Ücretini Folyoya İşle
-      // ═══════════════════════════════════════════════════
-      if (nightlyPrice && parseFloat(nightlyPrice) > 0) {
-        setCurrentStep('Oda ücreti folyoya işleniyor…')
-        
-        const checkInTime = new Date(checkInDate).getTime()
-        const checkOutTime = new Date(checkOutDate).getTime()
-        const diffDays = Math.ceil((checkOutTime - checkInTime) / (1000 * 60 * 60 * 24))
-        const totalNights = Math.max(1, diffDays)
-        const pricePerNight = parseFloat(nightlyPrice)
-        const totalAmount = pricePerNight * totalNights
-
-        const { error: txError } = await supabase
-          .from('transactions')
+        const { data: folioData, error: folioError } = await supabase
+          .from('folios')
           .insert({
-            folio_id: folioData.id,
-            transaction_type: 'ROOM_CHARGE',
-            amount: totalAmount,
-            description: `Konaklama Ücreti (${totalNights} Gece x ${pricePerNight} TL)`
+            reservation_id: reservationId,
+            status: 'OPEN',
           })
+          .select('id')
+          .single()
 
-        if (txError) {
-          throw new Error(`Oda ücreti folyoya işlenemedi: ${txError.message}`)
+        if (folioError) {
+          throw new Error(`Folyo oluşturulamadı: ${folioError.message}`)
+        }
+
+        if (totalAmount > 0) {
+          setCurrentStep('Oda ücreti folyoya işleniyor…')
+          
+          const checkInTime = new Date(checkInDate).getTime()
+          const checkOutTime = new Date(checkOutDate).getTime()
+          const diffDays = Math.ceil((checkOutTime - checkInTime) / (1000 * 60 * 60 * 24))
+          const totalNights = Math.max(1, diffDays)
+
+          const { error: txError } = await supabase
+            .from('transactions')
+            .insert({
+              folio_id: folioData.id,
+              transaction_type: 'ROOM_CHARGE',
+              amount: totalAmount,
+              description: `Konaklama Ücreti (${totalNights} Gece x ${pricePerNight} TL)`
+            })
+
+          if (txError) {
+            throw new Error(`Oda ücreti folyoya işlenemedi: ${txError.message}`)
+          }
         }
       }
 
@@ -771,6 +789,53 @@ export default function CheckIn() {
                       />
                     </div>
                   </div>
+
+                  {/* Rezervasyon Kaynağı */}
+                  <div>
+                    <Label htmlFor="channel">Rezervasyon Kaynağı</Label>
+                    <div className="flex gap-4 mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="channel"
+                          value="DIRECT"
+                          checked={channel === 'DIRECT'}
+                          onChange={() => { setChannel('DIRECT'); setAgencyName('') }}
+                          disabled={success}
+                          className="accent-gold-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Direkt</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="channel"
+                          value="AGENCY"
+                          checked={channel === 'AGENCY'}
+                          onChange={() => setChannel('AGENCY')}
+                          disabled={success}
+                          className="accent-gold-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Acente (OTA)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {channel === 'AGENCY' && (
+                    <div>
+                      <Label htmlFor="agencyName">Acente Adı</Label>
+                      <input
+                        id="agencyName"
+                        type="text"
+                        required
+                        value={agencyName}
+                        onChange={(e) => setAgencyName(e.target.value)}
+                        className={inputClass}
+                        placeholder="Örn: ETS Tur, TatilBudur, Booking…"
+                        disabled={success}
+                      />
+                    </div>
+                  )}
 
                   {/* Konaklama özeti */}
                   {checkInDate && checkOutDate && (
