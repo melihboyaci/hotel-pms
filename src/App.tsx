@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
+  Moon,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Dashboard from './pages/Dashboard'
@@ -25,6 +26,7 @@ import Guests from './pages/Guests'
 import Reservations from './pages/Reservations'
 import Transactions from './pages/Transactions'
 import CityLedger from './pages/CityLedger'
+import NightAudit from './pages/NightAudit'
 
 // --- Dummy placeholder bileşenleri (henüz geliştirilmemiş sayfalar) ---
 
@@ -88,6 +90,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Rezervasyonlar', path: '/reservations', icon: <CalendarRange size={20} /> },
   { label: 'Cari Hesaplar', path: '/city-ledger', icon: <Receipt size={20} /> },
   { label: 'Hareketler', path: '/transactions', icon: <ArrowLeftRight size={20} /> },
+  { label: 'Gün Sonu', path: '/night-audit', icon: <Moon size={20} /> },
 ]
 
 // --- Ana Layout (Sidebar + İçerik) ---
@@ -228,6 +231,7 @@ function App() {
             <Route path="reservations" element={<Reservations />} />
             <Route path="city-ledger" element={<CityLedger />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="night-audit" element={<NightAudit />} />
           </Route>
         </Routes>
       </BrowserRouter>

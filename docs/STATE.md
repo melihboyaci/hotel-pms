@@ -4,12 +4,9 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 
 ## Şu Anki Görev (Current Task)
 
-- **Hedef:** Faz 3.6.1 (Cari Hesaplar - Acente Filtreleme ve Fatura Özeti).
-- **Detay:** `src/pages/CityLedger.tsx` sayfasına muhasebe standartlarında gelişmiş filtreleme eklenecek.
-- **Kritik:**
-  1. Tablonun üstüne "Acente Adına Göre Ara" (Text/Select) ve "Durum" (Açık/Kapalı) filtreleri eklenecek.
-  2. Filtrelenen sonuçların toplam tutarını gösteren "Kesilecek Fatura Toplamı" isimli bir özet kartı olacak.
-  3. Tabloda acente adı (`folios.reservations.agency_name`) net bir şekilde gösterilecek.
+- **Hedef:** Faz 4.2 (Gün Sonu - Canlı Log Terminali ve Geçmiş Raporlar UI).
+- **Detay:** `NightAudit.tsx` sayfasına terminal benzeri bir log ekranı ve geçmiş gün sonlarını gösteren bir tablo eklenecek.
+- **Kritik:** Şimdilik asıl tahakkuk algoritması (Supabase insert vb.) yazılmayacak. Sadece UI (Arayüz) state'leri (`logs`, `isAuditing`) ve geçmiş raporları (`daily_reports`) çeken iskelet kurulacak.
 
 ## Alınan Kararlar (Değiştirilemez)
 
@@ -34,4 +31,7 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar._
 - `CheckIn.tsx` formuna Akıllı Misafir Arama (Autocomplete) bileşeni entegre edildi.
 - `Guests.tsx` sayfasına "Yeni Misafir" ekleme modalı eklendi.
 - `Folio.tsx` ekranına "Check-Out Yap" butonu, bakiyeli çıkış güvenlik engeli (toast hata), Supabase statü güncellemeleri (`CHECKED_OUT` ve `DIRTY`) ve Cari Hesap desteği eklendi.
-- Supabase TypeScript veri tipleri (`database.types.ts`) `npx supabase gen types` ile başarıyla güncellendi ve derleme doğrulandı.
+- Supabase TypeScript veri tipleri (`database.types.ts`), `swmdrxnerzvyhudmdsrv` proje ID'si kullanılarak (`npx supabase gen types typescript --project-id ...`) başarıyla güncellendi ve derleme doğrulandı.
+- `Dashboard.tsx` panosuna Gün Sonu (Night Audit) butonu, onay modalı, idempotency kontrolü ve toplu (bulk) ROOM_CHARGE tahakkuk mantığı entegre edildi.
+- `src/pages/NightAudit.tsx` sayfası (Gün Sonu İşlemleri) boş iskelet olarak oluşturuldu, `App.tsx` üzerinden yönlendirmesi yapıldı ve sol menüye eklendi.
+- `NightAudit.tsx` sayfasına canlı log terminali (monospace/koyu tema), 'Gün Sonunu Başlat' butonu, `isAuditing`/`logs` state yönetimi ve `daily_reports` tablosundan geçmiş Z-Raporları çeken DataGrid eklendi.

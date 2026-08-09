@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BedDouble,
@@ -13,6 +13,9 @@ import {
   FolderOpen,
   CheckCircle2,
   X,
+  Moon,
+  ShieldAlert,
+  Loader2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -369,6 +372,250 @@ function QuickActionModal({
   )
 }
 
+// --- Night Audit (Gün Sonu) Onay Modalı ---
+
+function NightAuditModal({
+  onClose,
+  onComplete,
+}: {
+  onClose: () => void
+  onComplete: (message: string, isError: boolean) => void
+}) {
+  const [step, setStep] = useState<'CONFIRM' | 'PROCESSING'>('CONFIRM')
+  const [progress, setProgress] = useState('')
+
+  const runNightAudit = useCallback(async () => {
+    setStep('PROCESSING')
+    setProgress('İdempotency kontrolü yapılıyor…')
+
+    try {
+      // 1) Çift çekim kontrolü — bugünün tarihiyle 'Gün Sonu Oda Ücreti' var mı?
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+
+      const { data: existingTx, error: checkErr } = await supabase
+        .from('transactions')
+        .select('id')
+        .gte('created_at', todayStart.toISOString())
+        .lte('created_at', todayEnd.toISOString())
+        .ilike('description', '%Gün Sonu Oda Ücreti%')
+        .limit(1)
+
+      if (checkErr) throw new Error(checkErr.message)
+
+      if (existingTx && existingTx.length > 0) {
+        onComplete('Bugünün gün sonu işlemi zaten yapılmış!', true)
+        return
+      }
+
+      // 2) Aktif (CHECKED_IN) rezervasyonları ve bağlı folyoları çek
+      setProgress('Aktif rezervasyonlar çekiliyor…')
+
+      const { data: activeReservations, error: resErr } = await supabase
+        .from('reservations')
+        .select(`
+          id,
+          check_in_date,
+          check_out_date,
+          total_price,
+          folios ( id )
+        `)
+        .eq('status', 'CHECKED_IN')
+
+      if (resErr) throw new Error(resErr.message)
+
+      if (!activeReservations || activeReservations.length === 0) {
+        onComplete('İçeride konaklayan misafir bulunamadı. İşlem yapılmadı.', true)
+        return
+      }
+
+      // 3) Tahakkuk hesaplaması — her rezervasyon için gecelik ücret
+      setProgress('Gecelik ücretler hesaplanıyor…')
+
+      type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
+      const transactionsToInsert: TransactionInsert[] = []
+      let processedCount = 0
+
+      for (const res of activeReservations) {
+        const checkIn = new Date(res.check_in_date)
+        const checkOut = new Date(res.check_out_date)
+        const nights = Math.max(
+          1,
+          Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
+        )
+        const totalPrice = res.total_price ?? 0
+        const nightlyRate = Math.round((totalPrice / nights) * 100) / 100
+
+        // Folyo kontrolü — tek folyo veya dizi olabilir
+        const folios = Array.isArray(res.folios)
+          ? res.folios
+          : res.folios
+            ? [res.folios]
+            : []
+
+        for (const folio of folios) {
+          transactionsToInsert.push({
+            folio_id: folio.id,
+            transaction_type: 'ROOM_CHARGE',
+            amount: nightlyRate,
+            description: 'Gün Sonu Oda Ücreti',
+          })
+          processedCount++
+        }
+      }
+
+      if (transactionsToInsert.length === 0) {
+        onComplete('Aktif rezervasyonlarda folyo bulunamadı. İşlem yapılmadı.', true)
+        return
+      }
+
+      // 4) Toplu (bulk) insert — tek seferde tüm transaction'ları yaz
+      setProgress(`${processedCount} adet odaya ücret yansıtılıyor…`)
+
+      const { error: insertErr } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert)
+
+      if (insertErr) throw new Error(insertErr.message)
+
+      onComplete(
+        `Gün Sonu başarıyla tamamlandı. ${processedCount} adet odaya ücret yansıtıldı.`,
+        false
+      )
+    } catch (err: any) {
+      onComplete(err?.message || 'Gün sonu işlemi sırasında bir hata oluştu.', true)
+    }
+  }, [onComplete])
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={step === 'CONFIRM' ? onClose : undefined}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Başlık */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-950 to-indigo-900">
+          <div className="flex items-center gap-3">
+            <Moon size={20} className="text-amber-300" />
+            <h2 className="text-lg font-bold text-white font-cinzel tracking-wide">
+              Gün Sonu (Night Audit)
+            </h2>
+          </div>
+          {step === 'CONFIRM' && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-indigo-300 hover:text-white hover:bg-indigo-800 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+
+        {/* İçerik */}
+        <div className="p-6">
+          {step === 'CONFIRM' && (
+            <>
+              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl mb-5">
+                <ShieldAlert size={22} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 leading-relaxed">
+                  <p className="font-semibold mb-1">Dikkat!</p>
+                  <p>
+                    Gün sonu işlemi başlatılacak. İçerideki tüm odalara gecelik
+                    konaklama ücretleri yansıtılacaktır.
+                  </p>
+                  <p className="mt-1 font-medium">Emin misiniz?</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  onClick={runNightAudit}
+                  className="flex-1 py-3 rounded-xl bg-indigo-950 text-white font-semibold hover:bg-indigo-900 transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Moon size={16} />
+                  Evet, Başlat
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 'PROCESSING' && (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="relative">
+                <div className="w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <Loader2 size={28} className="text-indigo-600 animate-spin" />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-gray-700">İşlem Devam Ediyor</p>
+                <p className="text-xs text-gray-500 mt-1 animate-pulse">{progress}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Gün Sonu Sonuç Toast'u ---
+
+function NightAuditToast({
+  message,
+  isError,
+  onDismiss,
+}: {
+  message: string
+  isError: boolean
+  onDismiss: () => void
+}) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 5000)
+    return () => clearTimeout(timer)
+  }, [onDismiss])
+
+  return (
+    <div className="fixed top-6 right-6 z-[200] animate-in slide-in-from-top-4 fade-in duration-300 max-w-sm">
+      <div
+        className={`flex items-start gap-3 p-4 rounded-xl shadow-2xl border ${
+          isError
+            ? 'bg-rose-50 border-rose-200 text-rose-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}
+      >
+        <div className="shrink-0 mt-0.5">
+          {isError ? (
+            <CircleAlert size={20} className="text-rose-500" />
+          ) : (
+            <CheckCircle2 size={20} className="text-emerald-500" />
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold">{isError ? 'İşlem Başarısız' : 'İşlem Başarılı'}</p>
+          <p className="text-xs mt-0.5 opacity-90">{message}</p>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // --- Ana Sayfa ---
 
 export default function Dashboard() {
@@ -377,6 +624,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<RoomWithReservations | null>(null)
+
+  // Night Audit state
+  const [nightAuditOpen, setNightAuditOpen] = useState(false)
+  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null)
 
   const fetchRooms = async () => {
     setLoading(true)
@@ -451,17 +702,26 @@ export default function Dashboard() {
             Hera City Hotel
           </p>
         </div>
-        <button
-          onClick={fetchRooms}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-lg border border-gold-500/40 bg-white px-4 py-2.5 text-sm font-semibold text-gold-600 hover:bg-gold-50 shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
-        >
-          <RefreshCw
-            size={15}
-            className={loading ? 'animate-spin text-gold-500' : 'text-gold-500'}
-          />
-          Yenile
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setNightAuditOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-indigo-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-900 shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Moon size={15} className="text-amber-300" />
+            🌙 Gün Sonu (Night Audit) Başlat
+          </button>
+          <button
+            onClick={fetchRooms}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-gold-500/40 bg-white px-4 py-2.5 text-sm font-semibold text-gold-600 hover:bg-gold-50 shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <RefreshCw
+              size={15}
+              className={loading ? 'animate-spin text-gold-500' : 'text-gold-500'}
+            />
+            Yenile
+          </button>
+        </div>
       </div>
 
       {/* Özet şerit */}
@@ -536,6 +796,25 @@ export default function Dashboard() {
           room={selectedRoom}
           onClose={() => setSelectedRoom(null)}
           onRefresh={fetchRooms}
+        />
+      )}
+
+      {nightAuditOpen && (
+        <NightAuditModal
+          onClose={() => setNightAuditOpen(false)}
+          onComplete={(message, isError) => {
+            setNightAuditOpen(false)
+            setToast({ message, isError })
+            if (!isError) fetchRooms()
+          }}
+        />
+      )}
+
+      {toast && (
+        <NightAuditToast
+          message={toast.message}
+          isError={toast.isError}
+          onDismiss={() => setToast(null)}
         />
       )}
     </div>
