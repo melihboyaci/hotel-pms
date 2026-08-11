@@ -7,7 +7,6 @@ import {
   BedDouble,
   Users,
   CalendarRange,
-  Building2,
   ArrowLeftRight,
   LogOut,
   ChevronLeft,
@@ -27,29 +26,6 @@ import Reservations from './pages/Reservations'
 import Transactions from './pages/Transactions'
 import CityLedger from './pages/CityLedger'
 import NightAudit from './pages/NightAudit'
-
-// --- Dummy placeholder bileşenleri (henüz geliştirilmemiş sayfalar) ---
-
-function PlaceholderPage({ title, icon }: { title: string; icon: React.ReactNode }) {
-  return (
-    <div className="flex-1 flex items-center justify-center p-12">
-      <div className="text-center">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gold-50 border-2 border-gold-200 mb-6">
-          {icon}
-        </div>
-        <h2 className="text-2xl font-bold text-gray-800 font-cinzel tracking-wide mb-2">
-          {title}
-        </h2>
-        <p className="text-sm text-gray-400 max-w-xs mx-auto">
-          Bu modül geliştirme aşamasındadır. Yakında aktif olacaktır.
-        </p>
-        <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-          🚧 Yapım Aşamasında
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // --- Korumalı Rota Bileşeni ---
 

@@ -20,9 +20,15 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   background-color: #ffffff;
   color: #1f2937;
+  /* Tablo ve rakamların net okunması için: */
+  font-variant-numeric: tabular-nums;
+}
+
+h1, .font-brand {
+  font-family: 'Cinzel', serif;
 }
 
 #root {

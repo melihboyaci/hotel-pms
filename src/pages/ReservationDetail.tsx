@@ -32,7 +32,6 @@ type Guest = Database['public']['Tables']['guests']['Row']
 type Folio = Database['public']['Tables']['folios']['Row']
 type Transaction = Database['public']['Tables']['transactions']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
-type TransactionType = Database['public']['Enums']['transaction_type']
 type PaymentMethod = Database['public']['Enums']['payment_method']
 
 type ReservationData = Reservation & {
@@ -475,7 +474,7 @@ export default function ReservationDetail() {
                 { key: 'ROOM_CHARGE', label: 'Konaklama', count: roomCharges.length, icon: <BedDouble size={15} /> },
                 { key: 'EXTRA', label: 'Ekstralar', count: extraCharges.length, icon: <Coffee size={15} /> },
                 { key: 'PAYMENT', label: 'Tahsilat', count: payments.length, icon: <Wallet size={15} /> },
-              ] as const
+              ] as { key: TabType; label: string; count?: number; icon: React.ReactNode }[]
             ).map((tab) => (
               <button
                 key={tab.key}

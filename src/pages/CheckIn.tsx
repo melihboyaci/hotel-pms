@@ -356,7 +356,7 @@ export default function CheckIn() {
       if (finalStatus === 'CHECKED_IN') {
         setCurrentStep('Folyo hesabı açılıyor…')
 
-        const { data: folioData, error: folioError } = await supabase
+        const { error: folioError } = await supabase
           .from('folios')
           .insert({
             reservation_id: reservationId,
@@ -371,24 +371,9 @@ export default function CheckIn() {
 
         if (totalAmount > 0) {
           setCurrentStep('Oda ücreti folyoya işleniyor…')
-          
-          const checkInTime = new Date(checkInDate).getTime()
-          const checkOutTime = new Date(checkOutDate).getTime()
-          const diffDays = Math.ceil((checkOutTime - checkInTime) / (1000 * 60 * 60 * 24))
-          const totalNights = Math.max(1, diffDays)
-
-          const { error: txError } = await supabase
-            .from('transactions')
-            .insert({
-              folio_id: folioData.id,
-              transaction_type: 'ROOM_CHARGE',
-              amount: totalAmount,
-              description: `Konaklama Ücreti (${totalNights} Gece x ${pricePerNight} TL)`
-            })
-
-          if (txError) {
-            throw new Error(`Oda ücreti folyoya işlenemedi: ${txError.message}`)
-          }
+          // Oda ücreti check-in'de basılmaz.
+          // Gece bazlı tahakkuk: Her gün sonu (Night Audit) çalıştığında,
+          // o geceye ait gecelik ücret ROOM_CHARGE olarak folyoya eklenir.
         }
       }
 

@@ -7,7 +7,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Receipt,
-  PlusCircle,
   Wallet,
   CreditCard,
   Banknote,
@@ -17,9 +16,10 @@ import {
   Scale,
   BedDouble,
   Coffee,
-  X,
   ShoppingBag,
   LogOut,
+  CalendarDays,
+  X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -37,6 +37,7 @@ type FolioWithReservation = Folio & {
     check_in_date: string
     check_out_date: string
     status: string | null
+    total_price: number | null
     room_id: string
     channel: string | null
     agency_name: string | null
@@ -232,6 +233,10 @@ export default function FolioPage() {
   const [modalPaymentMethod, setModalPaymentMethod] = useState<PaymentMethod>('CASH')
   const [modalSubmitting, setModalSubmitting] = useState(false)
 
+  // Tarih Değiştir Modal state'leri
+  const [showDateModal, setShowDateModal] = useState(false)
+  const [newCheckoutDate, setNewCheckoutDate] = useState('')
+
   // --- Veri çekme ---
   const fetchFolioData = useCallback(async () => {
     if (!reservationId) return
@@ -250,6 +255,7 @@ export default function FolioPage() {
             check_in_date,
             check_out_date,
             status,
+            total_price,
             room_id,
             channel,
             agency_name,
@@ -395,6 +401,48 @@ export default function FolioPage() {
     }
   }
 
+  // --- Tarih Değiştir İşlemi ---
+  const handleChangeDate = async () => {
+    if (!folio || !reservation) return
+    const newDateObj = new Date(newCheckoutDate)
+    const checkInDate = new Date(reservation.check_in_date)
+    
+    // Yalnızca Check-in'den sonraki tarihler kabul edilir
+    if (newDateObj <= checkInDate) {
+      setToastError('Yeni çıkış tarihi, giriş tarihinden sonra olmalıdır!')
+      setTimeout(() => setToastError(null), 5000)
+      return
+    }
+
+    setModalSubmitting(true)
+    try {
+      const currentNights = Math.max(1, Math.round((new Date(reservation.check_out_date).getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
+      const nightlyRate = (reservation.total_price || 0) / currentNights
+      
+      const newNights = Math.max(1, Math.round((newDateObj.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
+      const newTotalPrice = Math.round(newNights * nightlyRate)
+
+      const { error: updateError } = await supabase
+        .from('reservations')
+        .update({ 
+          check_out_date: newCheckoutDate,
+          total_price: newTotalPrice
+        })
+        .eq('id', reservation.id)
+
+      if (updateError) throw updateError
+
+      setShowDateModal(false)
+      setSubmitSuccess(true)
+      setTimeout(() => setSubmitSuccess(false), 3000)
+      await fetchFolioData()
+    } catch (err: any) {
+      setError(err?.message || 'Tarih güncellenemedi.')
+    } finally {
+      setModalSubmitting(false)
+    }
+  }
+
   // --- RENDER ---
 
   if (loading) {
@@ -515,6 +563,18 @@ export default function FolioPage() {
               <span className="font-medium text-gray-600">
                 {formatDate(reservation.check_out_date)}
               </span>
+              {reservation.status === 'CHECKED_IN' && (
+                <button
+                  onClick={() => {
+                    setNewCheckoutDate(reservation.check_out_date)
+                    setShowDateModal(true)
+                  }}
+                  className="ml-1 p-1 rounded-md text-gray-400 hover:text-gold-600 hover:bg-gold-50 transition-colors"
+                  title="Tarihi Değiştir"
+                >
+                  <CalendarDays size={14} />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -962,6 +1022,86 @@ export default function FolioPage() {
                   {checkoutSubmitting ? 'İşleniyor…' : 'Check-Out Yap'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ═══ Tarih Değiştir Modalı ═══ */}
+      {showDateModal && reservation && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowDateModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gold-50/50">
+              <div className="flex items-center gap-2.5">
+                <CalendarDays size={18} className="text-gold-600" />
+                <h2 className="text-lg font-bold text-gray-800 font-cinzel">Tarih Değiştir</h2>
+              </div>
+              <button onClick={() => setShowDateModal(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800 flex items-start gap-2 mb-2">
+                 <AlertCircle size={16} className="shrink-0 mt-0.5 text-blue-600" />
+                 <p>Çıkış tarihini değiştirdiğinizde toplam rezervasyon tutarı, mevcut gecelik fiyata göre yeniden hesaplanacaktır.</p>
+              </div>
+              
+              <div>
+                <Label htmlFor="modal-checkout-date">Yeni Çıkış Tarihi</Label>
+                <input
+                  id="modal-checkout-date"
+                  type="date"
+                  required
+                  min={new Date(new Date(reservation.check_in_date).getTime() + 86400000).toISOString().split('T')[0]}
+                  value={newCheckoutDate}
+                  onChange={(e) => setNewCheckoutDate(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              {/* Dinamik Fiyat Gösterimi */}
+              {newCheckoutDate && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 space-y-2 mt-4">
+                  <div className="flex justify-between text-sm">
+                     <span className="text-gray-500">Mevcut Toplam:</span>
+                     <span className="font-semibold">{formatCurrency(reservation.total_price || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                     <span className="text-gray-500">Yeni Gece Sayısı:</span>
+                     <span className="font-semibold">
+                       {Math.max(1, Math.round((new Date(newCheckoutDate).getTime() - new Date(reservation.check_in_date).getTime()) / (1000 * 60 * 60 * 24)))} Gece
+                     </span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                     <span className="text-gray-700 font-bold">Yeni Toplam:</span>
+                     <span className="font-bold text-emerald-600">
+                       {formatCurrency(
+                         Math.round(
+                           Math.max(1, Math.round((new Date(newCheckoutDate).getTime() - new Date(reservation.check_in_date).getTime()) / (1000 * 60 * 60 * 24))) * 
+                           ((reservation.total_price || 0) / Math.max(1, Math.round((new Date(reservation.check_out_date).getTime() - new Date(reservation.check_in_date).getTime()) / (1000 * 60 * 60 * 24))))
+                         )
+                       )}
+                     </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDateModal(false)}
+                className="px-4 py-2 rounded-lg font-semibold text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                disabled={modalSubmitting || !newCheckoutDate}
+                onClick={handleChangeDate}
+                className="px-6 py-2 rounded-lg bg-gold-600 hover:bg-gold-700 text-white font-semibold shadow-sm transition-all hover:shadow-md disabled:opacity-50 flex items-center gap-2 cursor-pointer text-sm"
+              >
+                {modalSubmitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Kaydet
+              </button>
             </div>
           </div>
         </div>
