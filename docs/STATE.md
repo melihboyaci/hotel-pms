@@ -5,7 +5,7 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar. Bir yapay zek
 ## Şu Anki Görev (Current Task)
 
 - **Hedef:** Faz 5 — AI ve RAG Katmanı hazırlığı. Sonraki adım NestJS backend iskeleti.
-- **Mevcut Durum:** Faz 4 (Night Audit Modülü) tamamen tamamlandı ve `main` dalına push edildi.
+- **Mevcut Durum:** Faz 4.5 (Raporlama Modülü — Z-Raporu PDF) tamamlandı.
 
 ## Alınan Kararlar (Değiştirilemez)
 
@@ -15,7 +15,8 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar. Bir yapay zek
 - **LLM:** DeepSeek V4 Flash (Faz 5'te entegre edilecek).
 - **RAG:** Ayrı Python mikroservisi olarak konumlandırılacak (Faz 5).
 - **Sistem-of-Record:** Check-in/out ve gelir/gider verilerinin ana kaynağı HMS (Otel Yönetim Sistemi) olarak kalacak. Bu uygulama sadece operasyonel yansıma ve özet sunar.
-- **Folyo Finansal Kurallar:** Borçlar pozitif (+), tahsilatlar negatif (−) `amount` olarak kaydedilir. `transaction_type`: ROOM_CHARGE \| EXTRA \| PAYMENT. Tahsilatlarda `payment_method` zorunludur.
+- **Folyo Finansal Kurallar:** Borçlar pozitif (+), tahsilatlar negatif (−) `amount` olarak kaydedilir. `transaction_type`: ROOM_CHARGE | EXTRA | PAYMENT | DISCOUNT. İskontolar (`DISCOUNT`) negatif tutar olarak kaydedilir. Tahsilatlarda `payment_method` zorunludur.
+- **Ekstra Harcamalar:** `transaction_type: 'EXTRA'` olan işlemler için `extra_category` (ROOM_SERVICE, LAUNDRY, RESTAURANT, OTHER) zorunludur.
 - **UI Mimarisi:** Sidebar-layout (`App.tsx`) + Outlet pattern. Login hariç tüm sayfalar sidebar ile birlikte render edilir. Folio ve ReservationDetail sayfaları `reservation.id` üzerinden erişilir.
 - **Gece Bazlı Tahakkuk (Opsiyon A — KESİN):** Check-in'de folyoya oda ücreti basılmaz. Her gün sonu çalıştırıldığında, `CHECKED_IN` tüm foliyolara o geceye ait tek gecelik ücret `ROOM_CHARGE` olarak eklenir. Gecelik ücret = `total_price / toplam_gece_sayısı`.
 - **Supabase Tip Güncelleme Komutu:** `npx supabase gen types typescript --project-id swmdrxnerzvyhudmdsrv > src/types/database.types.ts`
@@ -44,6 +45,12 @@ _Bu dosya projenin anlık durumunu ve çalışma belleğini tutar. Bir yapay zek
   5. Ekstra gelir + tahsilat aggregation.
   6. `daily_reports` Z-Raporu snapshot kaydı.
 - Geçmiş Z-Raporları tablosu (`daily_reports`).
+
+### Faz 4.5 (Raporlama Modülü — TAMAMLANDI)
+- `src/lib/reports/` modülü: `pdfmake` (browser build) ile client-side PDF üretimi.
+- **Gün Sonu Raporu PDF:** Gold-temalı kurumsal tasarım — otel logosu, özet kutuları, oda bazlı detay tablosu (koşullu renklendirme), işlem detayları tablosu, kullanıcı/sayfa footer.
+- **Main Courante PDF:** 16 sütunlu, yatay (landscape) tasarımlı günlük otel defteri. ODA SERVİSİ, ÇAMAŞIRHANE, RESTORAN gibi ekstra kırılımlarını içerir. Cari ödemeler ve iskontolar ayrı sütunlarda listelenir.
+- `NightAudit.tsx` geçmiş raporlar tablosuna satır başına "PDF İndir" butonu ve üst kısmına geçmiş tarihli "Main Courante İndir" bölümü eklendi.
 
 ## Bekleyen Sorular / Riskler
 

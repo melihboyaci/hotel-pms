@@ -55,6 +55,14 @@
 
 ---
 
+## Faz 4.5: Raporlama Modülü ✅ TAMAMLANDI
+
+- [x] **PDF Rapor Altyapısı:** `pdfmake` (browser build) ile client-side Z-Raporu PDF üretimi. `src/lib/reports/` modülü.
+- [x] **Z-Raporu PDF Şablonu:** Gold-temalı kurumsal tasarım — otel logosu, 4'lü özet kutusu, oda bazlı detay tablosu (koşullu renklendirme), işlem detayları tablosu, kullanıcı/sayfa footer'ı.
+- [x] **NightAudit PDF İndirme:** Geçmiş Raporlar tablosuna satır başına "PDF İndir" butonu. Tek sorgu ile transactions → folios → reservations → rooms/guests join'i, oda bazlı gruplama.
+
+---
+
 ## Faz 5: AI ve RAG Katmanı 🔜 BEKLIYOR
 
 - [ ] NestJS (TypeScript) backend iskeletinin kurulması.

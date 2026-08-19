@@ -12,9 +12,15 @@ import {
   Terminal,
   FileText,
   Trash2,
+  Download,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import type { Database } from '../types/database.types'
+import type { ZReportData, RoomBreakdownItem, TransactionItem } from '../lib/reports/report-types'
+import { generateZReportPDF } from '../lib/reports/pdf-generator'
+import { generateMainCourantePDF } from '../lib/reports/mc-pdf-generator'
+import type { MainCouranteData, MainCouranteRow } from '../lib/reports/report-types'
 
 // --- Veritabanı tipi ---
 type DailyReport = Database['public']['Tables']['daily_reports']['Row']
@@ -115,9 +121,13 @@ function AuditTerminal({ logs }: { logs: string[] }) {
 function ReportsTable({
   reports,
   loading,
+  onDownloadPDF,
+  downloadingDate,
 }: {
   reports: DailyReport[]
   loading: boolean
+  onDownloadPDF: (report: DailyReport) => void
+  downloadingDate: string | null
 }) {
   if (loading) {
     return (
@@ -176,6 +186,12 @@ function ReportsTable({
             <th className="text-right py-3 px-4 font-bold text-gray-600 uppercase tracking-wider text-xs">
               İşlem Zamanı
             </th>
+            <th className="text-center py-3 px-4 font-bold text-gray-600 uppercase tracking-wider text-xs">
+              <div className="flex items-center justify-center gap-1.5">
+                <Download size={13} />
+                İşlemler
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -206,6 +222,21 @@ function ReportsTable({
               <td className="py-3 px-4 text-right text-xs text-gray-400">
                 {report.performed_at ? formatDateTime(report.performed_at) : '—'}
               </td>
+              <td className="py-3 px-4 text-center">
+                <button
+                  onClick={() => onDownloadPDF(report)}
+                  disabled={downloadingDate === report.audit_date}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gold-50 border border-gold-200 text-gold-700 hover:bg-gold-100 hover:border-gold-300 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Gün Sonu Raporu PDF olarak indir"
+                >
+                  {downloadingDate === report.audit_date ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                  PDF
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -224,6 +255,16 @@ export default function NightAudit() {
   // Geçmiş raporlar
   const [reports, setReports] = useState<DailyReport[]>([])
   const [reportsLoading, setReportsLoading] = useState(true)
+
+  // PDF indirme state'i
+  const [downloadingDate, setDownloadingDate] = useState<string | null>(null)
+
+  // Main Courante State
+  const [mcDate, setMcDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [mcDownloading, setMcDownloading] = useState(false)
+
+  // Kullanıcı bilgisi
+  const { user } = useAuth()
 
   // --- Test Amaçlı: Bugünü Sıfırla ---
   const handleResetToday = async () => {
@@ -272,6 +313,171 @@ export default function NightAudit() {
     fetchReports()
   }, [])
 
+  // ─── PDF İndirme ─────────────────────────────────────
+  const handleDownloadPDF = async (report: DailyReport) => {
+    setDownloadingDate(report.audit_date)
+
+    try {
+      // 1. O tarihteki tüm transaction'ları ilişkili verilerle çek
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select(`
+          id,
+          amount,
+          transaction_type,
+          description,
+          payment_method,
+          created_at,
+          folio_id,
+          folios!inner (
+            id,
+            reservation_id,
+            reservations!inner (
+              id,
+              room_id,
+              total_price,
+              check_in_date,
+              check_out_date,
+              rooms ( room_number ),
+              guests ( first_name, last_name )
+            )
+          )
+        `)
+        .gte('created_at', `${report.audit_date}T00:00:00`)
+        .lte('created_at', `${report.audit_date}T23:59:59`)
+        .order('created_at', { ascending: true })
+
+      if (txError) throw txError
+
+      const allTx = txData ?? []
+
+      // 2. Oda bazlı breakdown oluştur
+      const roomMap = new Map<string, {
+        roomNumber: string
+        guestName: string
+        nights: number
+        nightlyRate: number
+        charges: number
+        payments: number
+      }>()
+
+      for (const tx of allTx) {
+        const folio = tx.folios as unknown as {
+          id: string
+          reservation_id: string
+          reservations: {
+            id: string
+            room_id: string
+            total_price: number
+            check_in_date: string
+            check_out_date: string
+            rooms: { room_number: string } | null
+            guests: { first_name: string; last_name: string } | null
+          }
+        }
+
+        const res = folio.reservations
+        const roomNumber = res.rooms?.room_number ?? '?'
+        const guestName = res.guests
+          ? `${res.guests.first_name} ${res.guests.last_name}`
+          : 'Bilinmiyor'
+
+        const checkIn = new Date(res.check_in_date)
+        const checkOut = new Date(res.check_out_date)
+        const nights = Math.max(
+          1,
+          Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
+        )
+        const nightlyRate = Math.round((res.total_price ?? 0) / nights)
+
+        if (!roomMap.has(roomNumber)) {
+          roomMap.set(roomNumber, {
+            roomNumber,
+            guestName,
+            nights,
+            nightlyRate,
+            charges: 0,
+            payments: 0,
+          })
+        }
+
+        const entry = roomMap.get(roomNumber)!
+        if (tx.transaction_type === 'PAYMENT') {
+          entry.payments += Math.abs(tx.amount)
+        } else {
+          entry.charges += tx.amount
+        }
+      }
+
+      const roomBreakdown: RoomBreakdownItem[] = Array.from(roomMap.values())
+        .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, 'tr'))
+        .map((r) => ({
+          roomNumber: r.roomNumber,
+          guestName: r.guestName,
+          nights: r.nights,
+          nightlyRate: r.nightlyRate,
+          totalPayments: r.payments,
+          balance: r.charges - r.payments,
+        }))
+
+      // 3. Transaction detay listesi
+      const transactions: TransactionItem[] = allTx.map((tx) => {
+        const folio = tx.folios as unknown as {
+          reservations: {
+            rooms: { room_number: string } | null
+          }
+        }
+        return {
+          time: tx.created_at
+            ? new Date(tx.created_at).toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : '—',
+          roomNumber: folio.reservations.rooms?.room_number ?? '?',
+          type: tx.transaction_type as TransactionItem['type'],
+          description: tx.description ?? '—',
+          amount: tx.amount,
+        }
+      })
+
+      // 4. Kullanıcı profil bilgisi
+      let generatedBy = { name: 'Bilinmiyor', role: 'N/A' }
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        generatedBy = {
+          name: user.email ?? 'Bilinmiyor',
+          role: profile?.role ?? 'N/A',
+        }
+      }
+
+      // 5. ZReportData oluştur ve PDF üret
+      const reportData: ZReportData = {
+        auditDate: report.audit_date,
+        totalRoomsSold: report.total_rooms_sold ?? 0,
+        totalRoomRevenue: report.total_room_revenue ?? 0,
+        totalExtraRevenue: report.total_extra_revenue ?? 0,
+        totalPayments: report.total_payments ?? 0,
+        performedAt: report.performed_at,
+        roomBreakdown,
+        transactions,
+        generatedBy,
+      }
+
+      await generateZReportPDF(reportData)
+    } catch (err: any) {
+      console.error('PDF oluşturma hatası:', err)
+      alert('PDF oluşturulurken bir hata oluştu: ' + (err.message ?? err))
+    } finally {
+      setDownloadingDate(null)
+    }
+  }
+
   // --- Yardımcı: Gecikme ---
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -281,7 +487,145 @@ export default function NightAudit() {
     setLogs((prev) => [...prev, `[${ts}] ${message}`])
   }
 
-  // --- Gün Sonu Başlat — Çekirdek Algoritma ---
+  // ─── Main Courante İndirme ───────────────────────────
+  const handleDownloadMainCourante = async () => {
+    setMcDownloading(true)
+    try {
+      // 1. O tarihteki aktif rezervasyonları bul
+      const { data: resData, error: resError } = await supabase
+        .from('reservations')
+        .select(`
+          id,
+          check_in_date,
+          check_out_date,
+          status,
+          rooms ( room_number ),
+          guests ( first_name, last_name ),
+          folios ( id )
+        `)
+        .lte('check_in_date', mcDate)
+        .gte('check_out_date', mcDate)
+        .in('status', ['CHECKED_IN', 'CHECKED_OUT'])
+
+      if (resError) throw resError
+
+      const activeRes = resData || []
+      const folioIds = activeRes.map(r => (Array.isArray(r.folios) ? r.folios[0] : r.folios)?.id).filter(Boolean) as string[]
+
+      if (folioIds.length === 0) {
+        alert('Seçilen tarihte aktif konaklama bulunmamaktadır.')
+        setMcDownloading(false)
+        return
+      }
+
+      // 2. Bu folyolara ait tüm işlemleri çek
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .in('folio_id', folioIds)
+
+      if (txError) throw txError
+      const allTx = txData || []
+
+      const targetDateStart = new Date(`${mcDate}T00:00:00`).getTime()
+      const targetDateEnd = new Date(`${mcDate}T23:59:59.999`).getTime()
+
+      // 3. Her rezervasyon için satır oluştur
+      const rows: MainCouranteRow[] = []
+
+      for (const res of activeRes) {
+        const folioId = (Array.isArray(res.folios) ? res.folios[0] : res.folios)?.id
+        if (!folioId) continue
+
+        const folioTx = allTx.filter(t => t.folio_id === folioId)
+
+        // İşlemleri ayır
+        const priorTx = folioTx.filter(t => new Date(t.created_at || '').getTime() < targetDateStart)
+        const todayTx = folioTx.filter(t => {
+          const tTime = new Date(t.created_at || '').getTime()
+          return tTime >= targetDateStart && tTime <= targetDateEnd
+        })
+        const allChargesTx = folioTx.filter(t => t.transaction_type === 'ROOM_CHARGE' || t.transaction_type === 'EXTRA')
+
+        // Hesaplamalar
+        const carriedBalance = priorTx.reduce((sum, t) => sum + t.amount, 0)
+        const grandTotal = allChargesTx.reduce((sum, t) => sum + t.amount, 0)
+
+        let dailyRate = 0
+        let roomService = 0
+        let laundry = 0
+        let restaurant = 0
+        let otherExtra = 0
+        let discount = 0
+        let cashPayment = 0
+        let cardPayment = 0
+        let transferPayment = 0
+        let cityLedger = 0
+
+        for (const t of todayTx) {
+          if (t.transaction_type === 'ROOM_CHARGE') {
+            dailyRate += t.amount
+          } else if (t.transaction_type === 'EXTRA') {
+            const cat = (t as any).extra_category
+            if (cat === 'ROOM_SERVICE') roomService += t.amount
+            else if (cat === 'LAUNDRY') laundry += t.amount
+            else if (cat === 'RESTAURANT') restaurant += t.amount
+            else otherExtra += t.amount
+          } else if (t.transaction_type === 'DISCOUNT') {
+            discount += Math.abs(t.amount)
+          } else if (t.transaction_type === 'PAYMENT') {
+            const absAmt = Math.abs(t.amount)
+            if (t.payment_method === 'CASH') cashPayment += absAmt
+            else if (t.payment_method === 'CREDIT_CARD') cardPayment += absAmt
+            else if (t.payment_method === 'BANK_TRANSFER') transferPayment += absAmt
+            else if (t.payment_method === 'CITY_LEDGER') cityLedger += absAmt
+          }
+        }
+
+        const dailyTotal = dailyRate + roomService + laundry + restaurant + otherExtra
+
+        rows.push({
+          roomNumber: res.rooms?.room_number || '?',
+          guestName: res.guests ? `${res.guests.first_name} ${res.guests.last_name}` : 'Bilinmeyen Misafir',
+          checkInDate: res.check_in_date,
+          checkOutDate: res.check_out_date,
+          dailyRate,
+          roomService,
+          laundry,
+          restaurant: restaurant + otherExtra,
+          dailyTotal,
+          carriedBalance,
+          grandTotal,
+          discount,
+          cashPayment,
+          cardPayment,
+          transferPayment,
+          cityLedger,
+        })
+      }
+
+      rows.sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
+
+      const mcData: MainCouranteData = {
+        reportDate: mcDate,
+        rows,
+        generatedBy: {
+          name: user?.email || 'Bilinmeyen Kullanıcı',
+          role: 'ADMIN',
+        }
+      }
+
+      await generateMainCourantePDF(mcData)
+
+    } catch (error: any) {
+      console.error(error)
+      alert('Main Courante oluşturulurken bir hata oluştu: ' + error.message)
+    } finally {
+      setMcDownloading(false)
+    }
+  }
+
+  // ─── Gün Sonu İşlemi (Night Audit Algoritması) ────────
   const handleStartAudit = async () => {
     setIsAuditing(true)
     setLogs([])
@@ -635,7 +979,43 @@ export default function NightAudit() {
         </div>
       </section>
 
-      {/* ═══ ALT BÖLÜM — Geçmiş Raporlar (Z-Raporları) ═══ */}
+      {/* ═══ ORTA BÖLÜM — Main Courante (Günlük Mizan) ═══ */}
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-5 w-1 rounded-full bg-blue-500" />
+          <h2 className="text-lg font-bold text-gray-800 tracking-wide">
+            Main Courante <span className="text-sm font-medium text-gray-400 ml-1">(Günlük Mizan)</span>
+          </h2>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col sm:flex-row items-end gap-4">
+          <div className="flex-1 w-full sm:max-w-xs">
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">
+              Rapor Tarihi
+            </label>
+            <input
+              type="date"
+              value={mcDate}
+              onChange={(e) => setMcDate(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors text-sm font-medium"
+            />
+          </div>
+          <button
+            onClick={handleDownloadMainCourante}
+            disabled={mcDownloading || !mcDate}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow"
+          >
+            {mcDownloading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <FileText size={16} />
+            )}
+            {mcDownloading ? 'Oluşturuluyor...' : 'Main Courante İndir'}
+          </button>
+        </div>
+      </section>
+
+      {/* ═══ ALT BÖLÜM — Geçmiş Raporlar (Gün Sonu Raporları) ═══ */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -643,7 +1023,7 @@ export default function NightAudit() {
             <h2 className="text-lg font-bold text-gray-800 tracking-wide">
               Geçmiş Raporlar
             </h2>
-            <span className="text-xs text-gray-400 font-medium ml-1">(Z-Raporu)</span>
+            <span className="text-xs text-gray-400 font-medium ml-1">(Gün Sonu Raporu)</span>
           </div>
           <button
             onClick={fetchReports}
@@ -656,7 +1036,7 @@ export default function NightAudit() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <ReportsTable reports={reports} loading={reportsLoading} />
+          <ReportsTable reports={reports} loading={reportsLoading} onDownloadPDF={handleDownloadPDF} downloadingDate={downloadingDate} />
         </div>
       </section>
     </div>

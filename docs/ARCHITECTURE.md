@@ -10,6 +10,7 @@
 | **Backend/DB** | Supabase (PostgreSQL) |
 | **Auth** | Supabase Auth (e-posta/şifre) |
 | **İkonlar** | Lucide React |
+| **PDF Rapor** | pdfmake (browser build) |
 | **Lint** | Oxlint |
 
 ---
@@ -27,7 +28,11 @@ hotel-pms/
 │   ├── contexts/
 │   │   └── AuthContext.tsx          # Supabase session yönetimi, useAuth() hook
 │   ├── lib/
-│   │   └── supabase.ts              # Supabase istemcisi (Database tipi ile createClient)
+│   │   ├── supabase.ts              # Supabase istemcisi (Database tipi ile createClient)
+│   │   └── reports/
+│   │       ├── report-types.ts      # Z-Raporu veri tipleri (ZReportData, RoomBreakdownItem vb.)
+│   │       ├── logo-helper.ts       # Otel logosunu base64'e çeviren yardımcı (cache'li)
+│   │       └── pdf-generator.ts     # pdfmake ile gold-temalı Z-Raporu PDF üretimi
 │   ├── types/
 │   │   └── database.types.ts        # `npx supabase gen types` ile üretilen otomatik tipler
 │   └── pages/
@@ -127,8 +132,9 @@ hotel-pms/
 |-------|-----|-----|
 | `id` | uuid (PK) | |
 | `folio_id` | uuid (FK → folios) | |
-| `transaction_type` | enum `transaction_type` | ROOM_CHARGE \| EXTRA \| PAYMENT |
-| `amount` | numeric | **Borçlar (+), tahsilatlar (−)** |
+| `transaction_type` | enum `transaction_type` | ROOM_CHARGE \| EXTRA \| PAYMENT \| DISCOUNT |
+| `amount` | numeric | **Borçlar (+), tahsilatlar ve iskontolar (−)** |
+| `extra_category` | enum `extra_category` \| null | ROOM_SERVICE \| LAUNDRY \| RESTAURANT \| OTHER (Sadece EXTRA tiplerinde) |
 | `description` | text \| null | Night Audit: "Gün Sonu Oda Ücreti" |
 | `payment_method` | enum `payment_method` \| null | CASH \| CREDIT_CARD \| BANK_TRANSFER \| CITY_LEDGER |
 | `created_by` | uuid \| null | Supabase auth.uid() |

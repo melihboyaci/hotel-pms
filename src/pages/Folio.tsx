@@ -20,6 +20,7 @@ import {
   LogOut,
   CalendarDays,
   X,
+  Percent,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -29,6 +30,7 @@ type Transaction = Database['public']['Tables']['transactions']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
 type TransactionType = Database['public']['Enums']['transaction_type']
 type PaymentMethod = Database['public']['Enums']['payment_method']
+type ExtraCategory = Database['public']['Enums']['extra_category']
 type Folio = Database['public']['Tables']['folios']['Row']
 
 type FolioWithReservation = Folio & {
@@ -70,6 +72,18 @@ const TRANSACTION_TYPE_CONFIG: Record<
     colorClass: 'text-emerald-700 bg-emerald-50 border-emerald-200',
     icon: <Wallet size={13} className="text-emerald-600" />,
   },
+  DISCOUNT: {
+    label: 'İskonto',
+    colorClass: 'text-violet-700 bg-violet-50 border-violet-200',
+    icon: <Percent size={13} className="text-violet-600" />,
+  },
+}
+
+const EXTRA_CATEGORY_LABEL: Record<ExtraCategory, string> = {
+  ROOM_SERVICE: 'Oda Servisi',
+  LAUNDRY: 'Çamaşırhane',
+  RESTAURANT: 'Restoran',
+  OTHER: 'Diğer',
 }
 
 const PAYMENT_METHOD_LABEL: Record<PaymentMethod, { label: string; icon: React.ReactNode }> = {
@@ -127,7 +141,7 @@ const inputClass =
   'w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-colors text-sm'
 
 // --- Tab tipi ---
-type FolioTab = 'ROOM_CHARGE' | 'EXTRA' | 'ALL'
+type FolioTab = 'ROOM_CHARGE' | 'EXTRA' | 'DISCOUNT' | 'ALL'
 
 // --- İşlem tablosu alt bileşeni ---
 function TransactionTable({ transactions }: { transactions: Transaction[] }) {
@@ -175,6 +189,11 @@ function TransactionTable({ transactions }: { transactions: Transaction[] }) {
                       <span className="flex items-center gap-1 text-[10px] text-gray-400">
                         {PAYMENT_METHOD_LABEL[tx.payment_method].icon}
                         {PAYMENT_METHOD_LABEL[tx.payment_method].label}
+                      </span>
+                    )}
+                    {tx.transaction_type === 'EXTRA' && (tx as Transaction & { extra_category: ExtraCategory | null }).extra_category && (
+                      <span className="text-[10px] text-blue-500 font-semibold">
+                        {EXTRA_CATEGORY_LABEL[(tx as Transaction & { extra_category: ExtraCategory }).extra_category]}
                       </span>
                     )}
                   </div>
@@ -228,9 +247,11 @@ export default function FolioPage() {
   // Modal state'leri
   const [showExtraModal, setShowExtraModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showDiscountModal, setShowDiscountModal] = useState(false)
   const [modalAmount, setModalAmount] = useState('')
   const [modalDescription, setModalDescription] = useState('')
   const [modalPaymentMethod, setModalPaymentMethod] = useState<PaymentMethod>('CASH')
+  const [modalExtraCategory, setModalExtraCategory] = useState<ExtraCategory>('ROOM_SERVICE')
   const [modalSubmitting, setModalSubmitting] = useState(false)
 
   // Tarih Değiştir Modal state'leri
@@ -303,11 +324,13 @@ export default function FolioPage() {
   const roomCharges = transactions.filter((t) => t.transaction_type === 'ROOM_CHARGE')
   const extraCharges = transactions.filter((t) => t.transaction_type === 'EXTRA')
   const payments = transactions.filter((t) => t.transaction_type === 'PAYMENT')
+  const discounts = transactions.filter((t) => t.transaction_type === 'DISCOUNT')
 
   const totalRoomCharge = roomCharges.reduce((sum, t) => sum + t.amount, 0)
   const totalExtra = extraCharges.reduce((sum, t) => sum + t.amount, 0)
+  const totalDiscount = discounts.reduce((sum, t) => sum + Math.abs(t.amount), 0)
   const totalPayments = payments.reduce((sum, t) => sum + Math.abs(t.amount), 0)
-  const totalCharges = totalRoomCharge + totalExtra
+  const totalCharges = totalRoomCharge + totalExtra - totalDiscount
   const balance = totalCharges - totalPayments
 
   // Aktif sekmeye göre filtreleme
@@ -316,11 +339,13 @@ export default function FolioPage() {
       ? roomCharges
       : activeTab === 'EXTRA'
         ? extraCharges
-        : transactions
+        : activeTab === 'DISCOUNT'
+          ? discounts
+          : transactions
 
 
   // --- Modal üzerinden işlem ekleme ---
-  const handleModalSubmit = async (type: 'EXTRA' | 'PAYMENT') => {
+  const handleModalSubmit = async (type: 'EXTRA' | 'PAYMENT' | 'DISCOUNT') => {
     if (!folio) return
 
     const numericAmount = parseFloat(modalAmount)
@@ -329,23 +354,30 @@ export default function FolioPage() {
     setModalSubmitting(true)
 
     try {
-      const payload: TransactionInsert = {
+      const payload: Record<string, unknown> = {
         folio_id: folio.id,
         transaction_type: type,
-        amount: type === 'PAYMENT' ? -numericAmount : numericAmount,
+        amount: type === 'PAYMENT' || type === 'DISCOUNT' ? -numericAmount : numericAmount,
         description: modalDescription.trim() || null,
         payment_method: type === 'PAYMENT' ? modalPaymentMethod : null,
       }
 
-      const { error: insertError } = await supabase.from('transactions').insert(payload)
+      // Ekstra kategorisi sadece EXTRA tipinde
+      if (type === 'EXTRA') {
+        payload.extra_category = modalExtraCategory
+      }
+
+      const { error: insertError } = await supabase.from('transactions').insert(payload as TransactionInsert)
       if (insertError) throw new Error(insertError.message)
 
       // Temizle ve kapat
       setModalAmount('')
       setModalDescription('')
       setModalPaymentMethod('CASH')
+      setModalExtraCategory('ROOM_SERVICE')
       setShowExtraModal(false)
       setShowPaymentModal(false)
+      setShowDiscountModal(false)
       setSubmitSuccess(true)
       setTimeout(() => setSubmitSuccess(false), 3000)
       await fetchFolioData()
@@ -649,7 +681,7 @@ export default function FolioPage() {
               {formatCurrency(totalCharges)}
             </p>
             <p className="text-[10px] text-rose-400 mt-1">
-              Konaklama: {formatCurrency(totalRoomCharge)} + Ekstra: {formatCurrency(totalExtra)}
+              Konaklama: {formatCurrency(totalRoomCharge)} + Ekstra: {formatCurrency(totalExtra)}{totalDiscount > 0 ? ` − İsk: ${formatCurrency(totalDiscount)}` : ''}
             </p>
           </div>
 
@@ -739,6 +771,14 @@ export default function FolioPage() {
             <Wallet size={16} />
             Tahsilat Al
           </button>
+          <button
+            type="button"
+            onClick={() => setShowDiscountModal(true)}
+            className="flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold text-sm shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Percent size={16} />
+            İskonto Uygula
+          </button>
         </div>
 
         <div className="space-y-0">
@@ -764,6 +804,12 @@ export default function FolioPage() {
                       label: 'Ekstra Harcamalar',
                       count: extraCharges.length,
                       icon: <Coffee size={14} />,
+                    },
+                    {
+                      key: 'DISCOUNT' as FolioTab,
+                      label: 'İskontolar',
+                      count: discounts.length,
+                      icon: <Percent size={14} />,
                     },
                   ] as const
                 ).map((tab) => (
@@ -838,6 +884,20 @@ export default function FolioPage() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              <div>
+                <Label htmlFor="modal-extra-category">Kategori</Label>
+                <select
+                  id="modal-extra-category"
+                  value={modalExtraCategory}
+                  onChange={(e) => setModalExtraCategory(e.target.value as ExtraCategory)}
+                  className={`${inputClass} cursor-pointer`}
+                >
+                  <option value="ROOM_SERVICE">Oda Servisi</option>
+                  <option value="LAUNDRY">Çamaşırhane</option>
+                  <option value="RESTAURANT">Restoran</option>
+                  <option value="OTHER">Diğer</option>
+                </select>
+              </div>
               <div>
                 <Label htmlFor="modal-extra-amount">Tutar (₺)</Label>
                 <div className="relative">
@@ -970,6 +1030,75 @@ export default function FolioPage() {
               >
                 {modalSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                 {modalSubmitting ? 'Kaydediliyor…' : 'Tahsilat Kaydet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ İskonto Uygula Modalı ═══ */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowDiscountModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-violet-50/50">
+              <div className="flex items-center gap-2.5">
+                <Percent size={18} className="text-violet-600" />
+                <h2 className="text-lg font-bold text-gray-800 font-cinzel">İskonto Uygula</h2>
+              </div>
+              <button onClick={() => setShowDiscountModal(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <Label htmlFor="modal-discount-amount">Tutar (₺)</Label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₺</span>
+                  <input
+                    id="modal-discount-amount"
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={modalAmount}
+                    onChange={(e) => setModalAmount(e.target.value)}
+                    className={`${inputClass} pl-8`}
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="modal-discount-desc">Açıklama</Label>
+                <input
+                  id="modal-discount-desc"
+                  type="text"
+                  value={modalDescription}
+                  onChange={(e) => setModalDescription(e.target.value)}
+                  className={inputClass}
+                  placeholder="Örn: Erken rezervasyon indirimi, Sadakat iskontosu…"
+                />
+              </div>
+              {modalAmount && parseFloat(modalAmount) > 0 && (
+                <div className="rounded-lg border border-violet-200 bg-violet-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-violet-600">İskonto uygulanacak</span>
+                    <span className="font-bold text-sm text-violet-700">− {formatCurrency(parseFloat(modalAmount))}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-violet-200/50">
+                    <span className="text-gray-500">İşlem sonrası bakiye</span>
+                    <span className="font-bold text-sm text-gray-800">{formatCurrency(balance - parseFloat(modalAmount))}</span>
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={modalSubmitting || !modalAmount || parseFloat(modalAmount) <= 0}
+                onClick={() => handleModalSubmit('DISCOUNT')}
+                className="w-full flex items-center justify-center gap-2.5 bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl font-semibold transition-all hover:shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {modalSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                {modalSubmitting ? 'Kaydediliyor…' : 'İskonto Kaydet'}
               </button>
             </div>
           </div>

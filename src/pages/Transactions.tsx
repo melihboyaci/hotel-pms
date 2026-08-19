@@ -10,6 +10,7 @@ import {
   Minus,
   Search,
   Filter,
+  Percent,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
@@ -42,12 +43,14 @@ const TRANSACTION_TYPE_LABEL: Record<TransactionType, string> = {
   ROOM_CHARGE: 'Oda Ücreti',
   EXTRA: 'Ekstra',
   PAYMENT: 'Tahsilat',
+  DISCOUNT: 'İskonto',
 }
 
 const TRANSACTION_TYPE_ICON: Record<TransactionType, React.ReactNode> = {
   ROOM_CHARGE: <BedDouble size={14} />,
   EXTRA: <ShoppingBag size={14} />,
   PAYMENT: <Banknote size={14} />,
+  DISCOUNT: <Percent size={14} />,
 }
 
 const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -354,6 +357,7 @@ export default function Transactions() {
               <option value="ROOM_CHARGE">Sadece Oda Ücretleri</option>
               <option value="EXTRA">Sadece Ekstralar</option>
               <option value="PAYMENT">Sadece Tahsilatlar</option>
+              <option value="DISCOUNT">Sadece İskontolar</option>
             </select>
           </div>
         </div>
@@ -452,7 +456,8 @@ export default function Transactions() {
                     ROOM_CHARGE: { bg: 'bg-gold-50', text: 'text-gold-700', border: 'border-gold-200' },
                     EXTRA: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
                     PAYMENT: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-                  }[tx.transaction_type]
+                    DISCOUNT: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                  }[tx.transaction_type] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' }
 
                   return (
                     <tr
