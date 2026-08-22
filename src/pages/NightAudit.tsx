@@ -545,11 +545,12 @@ export default function NightAudit() {
           const tTime = new Date(t.created_at || '').getTime()
           return tTime >= targetDateStart && tTime <= targetDateEnd
         })
-        const allChargesTx = folioTx.filter(t => t.transaction_type === 'ROOM_CHARGE' || t.transaction_type === 'EXTRA')
 
         // Hesaplamalar
+        // carriedBalance: Önceki günlere ait net bakiye (borçlar − ödemeler)
         const carriedBalance = priorTx.reduce((sum, t) => sum + t.amount, 0)
-        const grandTotal = allChargesTx.reduce((sum, t) => sum + t.amount, 0)
+        // grandTotal: Misafirin tüm konaklama boyunca net bakiyesi (borçlar − ödemeler − iskontolar)
+        const grandTotal = folioTx.reduce((sum, t) => sum + t.amount, 0)
 
         let dailyRate = 0
         let roomService = 0
